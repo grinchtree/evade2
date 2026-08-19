@@ -2,6 +2,7 @@ import { ActivityType, Events, GatewayIntentBits } from "discord.js";
 import { evClient } from "./src/structs/Client";
 import { logging } from "./src/utils/logging";
 import { config } from "./config";
+import { verifyDatabaseConnection } from "./src/database/database";
 
 async function bootstrap() {
   logging.info("Starting...");
@@ -30,6 +31,7 @@ async function bootstrap() {
     });
   });
 
+  await verifyDatabaseConnection();
   await client.start(config.token);
 }
 
