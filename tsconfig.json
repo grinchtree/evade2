@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    /* Environment */
+    "target": "ESNext",
+    "lib": ["ESNext"],
+    "types": ["bun"],
+
+    /* Modules */
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+
+    /* TypeScript */
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+
+    /* Safety */
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
+    /* Imports */
+    "resolveJsonModule": true,
+
+    /* Unused code */
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    /* Compatibility */
+    "noPropertyAccessFromIndexSignature": false,
+  },
+}
