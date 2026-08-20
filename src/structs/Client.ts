@@ -1,6 +1,8 @@
 import { Client, Collection, type ClientOptions } from "discord.js";
 import type { Command } from "../interfaces/Command";
 import { logging } from "../utils/logging";
+import { loadCommands } from "../loaders/commandLoader";
+import { loadEvents } from "../loaders/eventLoader";
 
 export class evClient extends Client {
   // store commands, aliases, and cooldown limits in memory
@@ -58,6 +60,10 @@ export class evClient extends Client {
   // log in to discord and track when the bot started
   public async start(token: string) {
     this.startTime = performance.now();
+
+    await loadCommands(this);
+    await loadEvents(this);
+
     await this.login(token).catch((error) => {
       logging.error(error);
       process.exit();
