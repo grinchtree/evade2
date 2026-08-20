@@ -65,6 +65,12 @@ export class Embeds {
     );
   }
 
+  static eyeGlass(description: string): EmbedBuilder {
+    return this.base(Colours.default).setDescription(
+      `${Emojis.mag} ${description}`,
+    );
+  }
+
   static fetch(description: string): EmbedBuilder {
     return this.base(Colours.theme).setDescription(
       `${Emojis.fetch} ${description}`,
