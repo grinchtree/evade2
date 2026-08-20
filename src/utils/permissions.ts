@@ -1,13 +1,19 @@
 import type { GuildMember, Message, Role } from "discord.js";
 import { Embeds, send } from "./messaging";
 
-interface HierarchyOptions {
+export interface HierarchyOptions {
   allowOnExecutor?: boolean;
   allowOnGuildOwner?: boolean;
   allowOnBot?: boolean;
 }
 
-// make sure users and the bot have permission to moderate a target
+export interface RoleHierarchyOptions {
+  allowManaged?: boolean;
+  allowBotRole?: boolean;
+  allowEveryone?: boolean;
+}
+
+// make sure users and the bot have permission to moderate a target member
 export async function checkHierarchy(
   message: Message,
   target: GuildMember,
@@ -35,6 +41,14 @@ export async function checkHierarchy(
     return false;
   }
 
+  // stop the bot from trying to moderate itself
+  if (!allowOnBot && target.id === bot.id) {
+    await send(message, {
+      embeds: [Embeds.deny(`${message.author}: I **can't ${action} myself**.`)],
+    });
+    return false;
+  }
+
   // stop anyone from moderating the server owner (unless explicitly permitted)
   if (!allowOnGuildOwner && target.id === message.guild.ownerId) {
     await send(message, {
@@ -43,14 +57,6 @@ export async function checkHierarchy(
           `${message.author}: You **can't ${action}** the **server owner**.`,
         ),
       ],
-    });
-    return false;
-  }
-
-  // stop the bot from trying to moderate itself
-  if (!allowOnBot && target.id === bot.id) {
-    await send(message, {
-      embeds: [Embeds.deny(`${message.author}: I **can't ${action} myself**.`)],
     });
     return false;
   }
@@ -74,30 +80,36 @@ export async function checkHierarchy(
     }
   }
 
-  // the bot needs to be higher in the role hierarchy than the target
-  if (target.roles.highest.position >= bot.roles.highest.position) {
-    const comparison =
-      target.roles.highest.position === bot.roles.highest.position
-        ? "equal to"
-        : "higher than";
+  // the bot needs a higher role than the target.
+  // (we skip this check if the target is the owner, because if they made it past
+  // the owner check above, it means allowOnGuildOwner is true and we want it to run).
+  if (target.id !== message.guild.ownerId) {
+    if (target.roles.highest.position >= bot.roles.highest.position) {
+      const comparison =
+        target.roles.highest.position === bot.roles.highest.position
+          ? "equal to"
+          : "higher than";
 
-    await send(message, {
-      embeds: [
-        Embeds.deny(
-          `${message.author}: I **can't ${action}** someone who is **${comparison} me**.`,
-        ),
-      ],
-    });
-    return false;
+      await send(message, {
+        embeds: [
+          Embeds.deny(
+            `${message.author}: I **can't ${action}** someone who is **${comparison} me**.`,
+          ),
+        ],
+      });
+      return false;
+    }
   }
 
   return true;
 }
 
+// make sure users and the bot have permission to modify a specific role
 export async function checkRoleHierarchy(
   message: Message,
   targetRole: Role,
   action: string,
+  options: RoleHierarchyOptions = {},
 ): Promise<boolean> {
   if (!message.guild || !message.member) return false;
 
@@ -106,8 +118,24 @@ export async function checkRoleHierarchy(
 
   if (!bot) return false;
 
-  // prevent the bot from trying to modify its own dedicated role
-  if (targetRole.tags?.botId === bot.id) {
+  const allowManaged = options.allowManaged ?? false;
+  const allowBot = options.allowBotRole ?? false;
+  const allowEveryone = options.allowEveryone ?? false;
+
+  // trying to modify the default @everyone role usually breaks discord api calls
+  if (!allowEveryone && targetRole.id === message.guild.id) {
+    await send(message, {
+      embeds: [
+        Embeds.deny(
+          `${message.author}: You **can't ${action}** the **@everyone** role.`,
+        ),
+      ],
+    });
+    return false;
+  }
+
+  // prevent the bot from trying to modify its own dedicated integration role
+  if (!allowBot && targetRole.tags?.botId === bot.id) {
     await send(message, {
       embeds: [
         Embeds.deny(
@@ -118,8 +146,8 @@ export async function checkRoleHierarchy(
     return false;
   }
 
-  // ignore roles managed by discord or integrations (like nitro booster or other bots)
-  if (targetRole.managed) {
+  // ignore roles managed by discord or other bots (like nitro booster roles)
+  if (!allowManaged && targetRole.managed) {
     await send(message, {
       embeds: [
         Embeds.deny(
