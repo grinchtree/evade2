@@ -43,12 +43,7 @@ const command: Command = {
     // assigning values to variables
     for (const arg of args) {
       if (!target) {
-        let attempt: User | undefined = await promiseUser(
-          client,
-          arg,
-          false,
-          true,
-        );
+        let attempt: User | undefined = await promiseUser(client, arg);
         // assign
         if (attempt) {
           target = attempt;

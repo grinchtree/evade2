@@ -52,12 +52,10 @@ const command: Command = {
         let attempt: User | GuildMember | undefined = await promiseMember(
           message.guild!,
           arg,
-          false,
-          true,
         );
         // if the member wasn't found, try finding the user
         if (!attempt) {
-          attempt = await promiseUser(client, arg, false, true);
+          attempt = await promiseUser(client, arg);
         }
 
         // assign
