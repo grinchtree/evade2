@@ -59,7 +59,7 @@ const command: Command = {
       await send(message, {
         embeds: [
           Embeds.eyeGlass(
-            `${message.author}: I **couldn't find anyone** by: \`${args[0]}\`.`,
+            `${message.author}: I **couldn't find** a **member**** by: \`${args[0]}\`.`,
           ),
         ],
       });
