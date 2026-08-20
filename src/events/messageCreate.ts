@@ -171,3 +171,5 @@ const event: Event = {
     }
   },
 } satisfies Event;
+
+export default event;
