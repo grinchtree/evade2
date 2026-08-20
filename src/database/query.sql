@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS members (
   sticky_roles TEXT[] DEFAULT '{}',
   preferences JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()), -- added so you can track profile updates
   PRIMARY KEY (user_id, guild_id)
 );
 
@@ -59,7 +60,8 @@ CREATE TABLE IF NOT EXISTS tempbans (
   guild_id TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  PRIMARY KEY (user_id, guild_id) -- prevents duplicate active tempbans for the same person
 );
 
 CREATE TABLE IF NOT EXISTS antinuke (
