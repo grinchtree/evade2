@@ -2,13 +2,7 @@ import { PermissionFlagsBits, type Message, type User } from "discord.js";
 import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
 import { Embeds, send } from "../../utils/messaging";
-import {
-  promiseBanEntry,
-  promiseMember,
-  promiseUser,
-} from "../../utils/promise";
-import { checkHierarchy } from "../../utils/permissions";
-import { stringToSeconds } from "../../utils/formatters";
+import { promiseBanEntry, promiseUser } from "../../utils/promise";
 
 const command: Command = {
   name: "unban",
