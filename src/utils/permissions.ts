@@ -1,4 +1,9 @@
-import type { GuildMember, Message, Role } from "discord.js";
+import {
+  PermissionFlagsBits,
+  type GuildMember,
+  type Message,
+  type Role,
+} from "discord.js";
 import { Embeds, send } from "./messaging";
 
 export interface HierarchyOptions {
@@ -61,13 +66,17 @@ export async function checkHierarchy(
     return false;
   }
 
-  // executor needs a higher role than the target (unless they own the server)
-  if (exec.id !== message.guild.ownerId) {
-    if (target.roles.highest.position >= exec.roles.highest.position) {
-      const comparison =
-        target.roles.highest.position === exec.roles.highest.position
-          ? "equal to"
-          : "higher than";
+  // executor needs a higher role than the target
+  // (skipped if executor owns the server OR is explicitly permitted to target themselves)
+  const isPermittedSelf = allowOnExec && target.id === exec.id;
+
+  if (exec.id !== message.guild.ownerId && !isPermittedSelf) {
+    const execPosDiff = exec.roles.highest.comparePositionTo(
+      target.roles.highest,
+    );
+
+    if (execPosDiff <= 0) {
+      const comparison = execPosDiff === 0 ? "equal to" : "higher than";
 
       await send(message, {
         embeds: [
@@ -80,15 +89,25 @@ export async function checkHierarchy(
     }
   }
 
-  // the bot needs a higher role than the target.
-  // (we skip this check if the target is the owner, because if they made it past
-  // the owner check above, it means allowOnGuildOwner is true and we want it to run).
-  if (target.id !== message.guild.ownerId) {
-    if (target.roles.highest.position >= bot.roles.highest.position) {
-      const comparison =
-        target.roles.highest.position === bot.roles.highest.position
-          ? "equal to"
-          : "higher than";
+  // the bot needs a higher role than the target
+  // (skipped if target is the owner and permitted OR target is the bot and permitted)
+  const isPermittedOwner =
+    allowOnGuildOwner && target.id === message.guild.ownerId;
+  const isPermittedBot = allowOnBot && target.id === bot.id;
+
+  if (!isPermittedOwner && !isPermittedBot) {
+    const botPosDiff = bot.roles.highest.comparePositionTo(
+      target.roles.highest,
+    );
+    const isTimeoutAdmin =
+      action === "timeout" &&
+      target.permissions.has(PermissionFlagsBits.Administrator);
+
+    // trigger if the bot is lower/equal, OR if it's an admin timeout attempt
+    if (botPosDiff <= 0 || isTimeoutAdmin) {
+      // if target is strictly higher in the role list, use "higher than".
+      // if target is equal, OR if they are lower but have Admin immunity, use "equal to".
+      const comparison = botPosDiff < 0 ? "higher than" : "equal to";
 
       await send(message, {
         embeds: [
