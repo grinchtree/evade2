@@ -25,12 +25,22 @@ export async function checkHierarchy(
   const allowOnGuildOwner = options.allowOnGuildOwner ?? false;
   const allowOnBot = options.allowOnBot ?? false;
 
-  // nobody gets to moderate the server owner
+  // prevent the user from targeting themselves
+  if (!allowOnExec && target.id === exec.id) {
+    await send(message, {
+      embeds: [
+        Embeds.deny(`${message.author}: You **can't ${action} yourself**.`),
+      ],
+    });
+    return false;
+  }
+
+  // stop anyone from moderating the server owner (unless explicitly permitted)
   if (!allowOnGuildOwner && target.id === message.guild.ownerId) {
     await send(message, {
       embeds: [
         Embeds.deny(
-          `${message.author} You **can't ${action}** the **server owner**.`,
+          `${message.author}: You **can't ${action}** the **server owner**.`,
         ),
       ],
     });
@@ -64,11 +74,8 @@ export async function checkHierarchy(
     }
   }
 
-  // the bot also needs to be higher in the role hierarchy
-  if (
-    target.id === message.guild.ownerId ||
-    target.roles.highest.position >= bot.roles.highest.position
-  ) {
+  // the bot needs to be higher in the role hierarchy than the target
+  if (target.roles.highest.position >= bot.roles.highest.position) {
     const comparison =
       target.roles.highest.position === bot.roles.highest.position
         ? "equal to"
@@ -77,7 +84,7 @@ export async function checkHierarchy(
     await send(message, {
       embeds: [
         Embeds.deny(
-          `${message.author}: I **can't ${action}** someone who is **${comparison} me**`,
+          `${message.author}: I **can't ${action}** someone who is **${comparison} me**.`,
         ),
       ],
     });
