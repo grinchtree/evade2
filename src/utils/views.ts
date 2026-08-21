@@ -25,10 +25,12 @@ export interface PaginatorOptions<T> {
   userId: string;
   thumbnail?: string;
   formatItem: (item: T, index: number) => string;
+  getSearchString?: (item: T) => string;
 }
 
 export class Paginator<T> {
   private items: T[];
+  private originalItems: T[]; // keeps a backup of the full list so we can reset searches
   private itemsPerPage: number;
   private totalPages: number;
   private currentPage: number = 1;
@@ -37,7 +39,8 @@ export class Paginator<T> {
   constructor(options: PaginatorOptions<T>) {
     this.options = options;
     // fallback to empty array just in case undefined is passed
-    this.items = options.items || [];
+    this.originalItems = options.items || [];
+    this.items = [...this.originalItems]; // clone the array for current view
     this.itemsPerPage = options.itemsPerPage ?? 10;
 
     // calculate total pages, ensuring there's always at least 1 page even if empty
@@ -45,6 +48,19 @@ export class Paginator<T> {
       1,
       Math.ceil(this.items.length / this.itemsPerPage),
     );
+  }
+
+  // internal fuzzy finding algorithm (e.g., "fz" matches "fzlgoe")
+  private fuzzyMatch(query: string, target: string): boolean {
+    const q = query.toLowerCase();
+    const t = target.toLowerCase();
+    let qIdx = 0;
+
+    for (let i = 0; i < t.length; i++) {
+      if (t[i] === q[qIdx]) qIdx++;
+      if (qIdx === q.length) return true;
+    }
+    return false;
   }
 
   private generateEmbed(): EmbedBuilder {
@@ -59,7 +75,7 @@ export class Paginator<T> {
         ? currentItems
             .map((item, index) => this.options.formatItem(item, start + index))
             .join("\n")
-        : "No entries found.";
+        : "No entries found matching your search.";
 
     const embed = new EmbedBuilder().setDescription(description).setFooter({
       text: `${this.items.length} entries - Page ${this.currentPage}/${this.totalPages}`,
@@ -79,8 +95,9 @@ export class Paginator<T> {
     disableAll: boolean = false,
   ): ActionRowBuilder<ButtonBuilder> {
     const isOnlyPage = this.totalPages === 1;
+    const row = new ActionRowBuilder<ButtonBuilder>();
 
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    row.addComponents(
       // back button
       new ButtonBuilder()
         .setCustomId("page_left")
@@ -94,7 +111,20 @@ export class Paginator<T> {
         .setEmoji("<:jump:1525215410004299938>")
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(disableAll || isOnlyPage),
+    );
 
+    // if the search string function is provided, dynamically add the Search button!
+    if (this.options.getSearchString) {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId("page_search")
+          .setEmoji("<:search:1540365951206293654>")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(disableAll),
+      );
+    }
+
+    row.addComponents(
       // forward button
       new ButtonBuilder()
         .setCustomId("page_right")
@@ -111,6 +141,8 @@ export class Paginator<T> {
         .setStyle(ButtonStyle.Danger)
         .setDisabled(disableAll),
     );
+
+    return row;
   }
 
   public async start(message: Message) {
@@ -123,10 +155,7 @@ export class Paginator<T> {
     if (message.channel.isDMBased()) {
       paginatorMessage = await send(
         message,
-        {
-          embeds: [embed],
-          components: [components],
-        },
+        { embeds: [embed], components: [components] },
         true,
       );
     } else {
@@ -136,16 +165,15 @@ export class Paginator<T> {
       });
     }
 
-    // if send failed (e.g., missing permissions), safely abort to prevent crashes
+    // if send failed, safely abort
     if (!paginatorMessage) return;
 
     const collector = paginatorMessage.createMessageComponentCollector({
       componentType: ComponentType.Button,
-      time: this.options.timeout ?? 60000, // defaults to 60 seconds
+      time: this.options.timeout ?? 60000,
     });
 
     collector.on("collect", async (interaction) => {
-      // prevent other users from hijacking the paginator
       if (interaction.user.id !== this.options.userId) {
         await interaction.reply({
           embeds: [
@@ -158,7 +186,6 @@ export class Paginator<T> {
         return;
       }
 
-      // handle pagination logic
       if (interaction.customId === "page_left") {
         this.currentPage--;
       } else if (interaction.customId === "page_right") {
@@ -167,8 +194,65 @@ export class Paginator<T> {
         await paginatorMessage!.delete().catch(() => null);
         collector.stop("deleted");
         return;
+      } else if (interaction.customId === "page_search") {
+        // build search modal
+        const modal = new ModalBuilder()
+          .setCustomId("modal_search")
+          .setTitle("Fuzzy Search");
+
+        const searchInput = new TextInputBuilder()
+          .setCustomId("search_input")
+          .setLabel("Enter query (leave empty to reset)")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false);
+
+        modal.addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(searchInput),
+        );
+
+        await interaction.showModal(modal);
+
+        try {
+          const modalSubmit = await interaction.awaitModalSubmit({
+            filter: (i) =>
+              i.customId === "modal_search" &&
+              i.user.id === this.options.userId,
+            time: 60000,
+          });
+
+          const query = modalSubmit.fields
+            .getTextInputValue("search_input")
+            .trim();
+
+          // if empty, restore the original full list
+          if (!query) {
+            this.items = [...this.originalItems];
+          } else {
+            // fuzzy filter the items
+            this.items = this.originalItems.filter((item) => {
+              const targetStr = this.options.getSearchString!(item);
+              return this.fuzzyMatch(query, targetStr);
+            });
+          }
+
+          // recalculate math and reset to page 1
+          this.totalPages = Math.max(
+            1,
+            Math.ceil(this.items.length / this.itemsPerPage),
+          );
+          this.currentPage = 1;
+
+          if (modalSubmit.isFromMessage()) {
+            await modalSubmit.update({
+              embeds: [this.generateEmbed()],
+              components: [this.generateButtons()],
+            });
+          }
+          return;
+        } catch (error) {
+          return; // modal timed out
+        }
       } else if (interaction.customId === "page_jump") {
-        // build and show the page jump modal
         const modal = new ModalBuilder()
           .setCustomId("modal_jump")
           .setTitle("Jump to Page");
@@ -186,7 +270,6 @@ export class Paginator<T> {
         await interaction.showModal(modal);
 
         try {
-          // wait for the user to submit the modal
           const modalSubmit = await interaction.awaitModalSubmit({
             filter: (i) =>
               i.customId === "modal_jump" && i.user.id === this.options.userId,
@@ -195,10 +278,9 @@ export class Paginator<T> {
 
           const requestedPage = parseInt(
             modalSubmit.fields.getTextInputValue("page_input"),
-            10, // added radix for safe parsing
+            10,
           );
 
-          // validate the input and reply to the MODAL interaction (not the button)
           if (
             isNaN(requestedPage) ||
             requestedPage < 1 ||
@@ -217,7 +299,6 @@ export class Paginator<T> {
 
           this.currentPage = requestedPage;
 
-          // update the message with the new page via the modal submit
           if (modalSubmit.isFromMessage()) {
             await modalSubmit.update({
               embeds: [this.generateEmbed()],
@@ -226,13 +307,15 @@ export class Paginator<T> {
           }
           return;
         } catch (error) {
-          // modal timed out, quietly cancel
           return;
         }
       }
 
-      // update the message for standard left/right button clicks
-      if (interaction.customId !== "page_jump" && !interaction.replied) {
+      if (
+        interaction.customId !== "page_jump" &&
+        interaction.customId !== "page_search" &&
+        !interaction.replied
+      ) {
         await interaction.update({
           embeds: [this.generateEmbed()],
           components: [this.generateButtons()],
@@ -241,10 +324,8 @@ export class Paginator<T> {
     });
 
     collector.on("end", async (_, reason) => {
-      // do nothing if the user manually deleted the message
       if (reason === "deleted") return;
 
-      // gracefully disable buttons when the collector times out
       await paginatorMessage!
         .edit({ components: [this.generateButtons(true)] })
         .catch(() => null);
