@@ -59,8 +59,17 @@ const command: Command = {
       }
 
       if (!timeoutDuration) {
-        const attempt = stringToSeconds(arg);
+        let attempt: number | undefined;
+
+        try {
+          // attempt to get a valid value
+          attempt = stringToSeconds(arg);
+        } catch {
+          // if failed, assign undefined
+          attempt = undefined;
+        }
         if (attempt) {
+          // if attempt was successful, assign
           timeoutDuration = attempt;
           continue;
         }

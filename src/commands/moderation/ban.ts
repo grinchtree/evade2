@@ -66,8 +66,17 @@ const command: Command = {
       }
 
       if (!deleteMessageSeconds) {
-        const attempt = stringToSeconds(arg);
+        let attempt: number | undefined;
+
+        try {
+          // attempt to get a valid value
+          attempt = stringToSeconds(arg);
+        } catch {
+          // if failed, assign undefined
+          attempt = undefined;
+        }
         if (attempt) {
+          // if attempt was successful, assign
           deleteMessageSeconds = attempt;
           continue;
         }
