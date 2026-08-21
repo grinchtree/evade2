@@ -78,7 +78,7 @@ const command: Command = {
         await send(message, {
           embeds: [
             Embeds.approve(
-              `${message.author}: Successfully **set server prefix** to \`${prefix}\`.`,
+              `${message.author}: Successfully **set server prefix** to: \`${prefix}\`.`,
             ),
           ],
         });
@@ -115,7 +115,7 @@ const command: Command = {
         await send(message, {
           embeds: [
             Embeds.approve(
-              `${message.author}: Successfully **set server prefix** to \`${config.prefix}\`.`,
+              `${message.author}: Successfully **set server prefix** to: \`${config.prefix}\`.`,
             ),
           ],
         });
