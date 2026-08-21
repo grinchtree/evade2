@@ -1,8 +1,6 @@
 import { supabase } from "./database";
 import { DatabaseCache } from "./cache";
 import { logging } from "../utils/logging";
-import type { Message } from "discord.js";
-import { send, Embeds } from "../utils/messaging";
 import type {
   UserData,
   GuildData,
@@ -19,18 +17,25 @@ import type {
 const guildsCache = new DatabaseCache<GuildData | null>(1000, 600000);
 const usersCache = new DatabaseCache<UserData | null>(2000, 600000);
 const membersCache = new DatabaseCache<MemberData | null>(5000, 300000);
-const casesCache = new DatabaseCache<CaseData | null>(1000, 300000);
+
+// unified cases cache: handles both single CaseData objects and arrays of CaseData[]
+const casesCache = new DatabaseCache<CaseData | CaseData[] | null>(
+  1000,
+  300000,
+);
+
 const hardbanCache = new DatabaseCache<HardbanData | null>(1000, 260000);
 const antinukeCache = new DatabaseCache<AntinukeData | null>(1000, 260000);
 const prefixCache = new DatabaseCache<PrefixData>(1000, 260000);
 const warningsCache = new DatabaseCache<WarningData[]>(1000, 300000);
-const disabledCommandsCache = new DatabaseCache<DisabledCommandData>(
+const disabledCommandsCache = new DatabaseCache<DisabledCommandData | null>(
   1000,
   300000,
 );
 
 // --- GUILD DATA ---
 
+// fetch a guild's configuration from the database or cache
 export async function getGuildData(
   id: string,
   autoCreate: boolean = true,
@@ -55,6 +60,7 @@ export async function getGuildData(
   });
 }
 
+// selectively update guild preferences or state
 export async function updateGuildData(
   id: string,
   data: Partial<GuildData>,
@@ -66,29 +72,32 @@ export async function updateGuildData(
   if (current) guildsCache.set(id, { ...current, ...data });
 }
 
+// completely wipe a guild's profile from the database
 export async function deleteGuildData(id: string): Promise<void> {
   await supabase.from("guilds").delete().eq("id", id);
   guildsCache.delete(id);
 }
 
+// remove a guild from the local cache without deleting database records
 export async function dumpGuildData(id: string): Promise<void> {
   guildsCache.delete(id);
 }
 
 // --- PREFIX DATA ---
 
+// quickly retrieve just the prefix for a specific guild
 export async function getPrefixData(id: string): Promise<string> {
   return prefixCache
     .getOrFetch(id, async () => {
       const guild = await getGuildData(id, true);
       const prefix = guild?.preferences?.prefix || ",";
 
-      // getOrFetch handles the cache setting automatically, we just return the object it expects
       return { id, prefix } as PrefixData;
     })
     .then((res) => res.prefix);
 }
 
+// update a guild's custom prefix
 export async function setPrefixData(
   id: string,
   newPrefix: string,
@@ -104,12 +113,14 @@ export async function setPrefixData(
   prefixCache.set(id, { id, prefix: newPrefix });
 }
 
+// remove a prefix from the local cache
 export async function dumpGuildPrefix(id: string): Promise<void> {
   prefixCache.delete(id);
 }
 
 // --- USER DATA ---
 
+// fetch a global user profile from the database or cache
 export async function getUserData(
   id: string,
   autoCreate: boolean = true,
@@ -133,6 +144,7 @@ export async function getUserData(
   });
 }
 
+// update a user's global profile
 export async function updateUserData(
   id: string,
   data: Partial<UserData>,
@@ -143,17 +155,20 @@ export async function updateUserData(
   if (current) usersCache.set(id, { ...current, ...data });
 }
 
+// permanently delete a user's global profile
 export async function deleteUserData(id: string): Promise<void> {
   await supabase.from("users").delete().eq("id", id);
   usersCache.delete(id);
 }
 
+// remove a user from the local cache
 export async function dumpUserData(id: string): Promise<void> {
   usersCache.delete(id);
 }
 
 // --- MEMBER DATA ---
 
+// fetch a server-specific member profile from the database or cache
 export async function getMemberData(
   user_id: string,
   guild_id: string,
@@ -174,7 +189,7 @@ export async function getMemberData(
     if (autoCreate) {
       // make sure the guild exists before trying to tie a member to it
       await getGuildData(guild_id, true);
-      await getUserData(user_id, true); // good practice to ensure the user exists globally too
+      await getUserData(user_id, true);
 
       const newMember: MemberData = {
         user_id,
@@ -191,6 +206,7 @@ export async function getMemberData(
   });
 }
 
+// update a server-specific member profile
 export async function updateMemberData(
   user_id: string,
   guild_id: string,
@@ -208,6 +224,7 @@ export async function updateMemberData(
   }
 }
 
+// remove a member from the local cache
 export async function dumpMemberData(
   user_id: string,
   guild_id: string,
@@ -217,6 +234,7 @@ export async function dumpMemberData(
 
 // --- WARNINGS DATA ---
 
+// fetch all warnings for a specific member in a guild
 export async function getMemberWarning(
   user_id: string,
   guild_id: string,
@@ -239,10 +257,10 @@ export async function getMemberWarning(
   });
 }
 
+// issue a new warning to a member
 export async function addMemberWarning(
   data: WarningData,
 ): Promise<WarningData | null> {
-  // make sure the core profiles exist first
   await getGuildData(data.guild_id, true);
   await getMemberData(data.user_id, data.guild_id, true);
 
@@ -263,8 +281,8 @@ export async function addMemberWarning(
   return inserted;
 }
 
+// delete a specific warning by its ID
 export async function deleteMemberWarning(warning_id: string): Promise<void> {
-  // fetch the warning first so we know whose cache to invalidate
   const { data: warning } = await supabase
     .from("warnings")
     .select("user_id, guild_id")
@@ -273,12 +291,14 @@ export async function deleteMemberWarning(warning_id: string): Promise<void> {
 
   await supabase.from("warnings").delete().eq("warning_id", warning_id);
 
-  // if we successfully found it, wipe their specific cache
   if (warning) {
     warningsCache.delete(`${warning.user_id}-${warning.guild_id}`);
   }
 }
 
+// --- ANTINUKE DATA ---
+
+// fetch antinuke configuration for a guild
 export async function getAntinukeData(
   guild_id: string,
   autoCreate: boolean = true,
@@ -293,7 +313,7 @@ export async function getAntinukeData(
     if (data) return data;
 
     if (autoCreate) {
-      await getGuildData(guild_id, true); // ensure guild exists first
+      await getGuildData(guild_id, true);
 
       const newAntinuke: AntinukeData = {
         guild_id,
@@ -309,6 +329,7 @@ export async function getAntinukeData(
   });
 }
 
+// update a guild's antinuke settings
 export async function updateAntinukeData(
   guild_id: string,
   data: Partial<AntinukeData>,
@@ -319,6 +340,7 @@ export async function updateAntinukeData(
   if (current) antinukeCache.set(guild_id, { ...current, ...data });
 }
 
+// disable/delete a guild's antinuke configuration
 export async function deleteAntinukeData(guild_id: string): Promise<void> {
   await supabase.from("antinuke").delete().eq("guild_id", guild_id);
   antinukeCache.delete(guild_id);
@@ -326,6 +348,7 @@ export async function deleteAntinukeData(guild_id: string): Promise<void> {
 
 // --- HARDBAN DATA ---
 
+// check if a user is hardbanned in a specific guild
 export async function getHardbanData(
   user_id: string,
   guild_id: string,
@@ -344,6 +367,7 @@ export async function getHardbanData(
   });
 }
 
+// issue a hardban for a user in a guild
 export async function addHardban(
   data: HardbanData,
 ): Promise<HardbanData | null> {
@@ -365,6 +389,7 @@ export async function addHardban(
   return inserted;
 }
 
+// remove a hardban for a user in a guild
 export async function deleteHardban(
   user_id: string,
   guild_id: string,
@@ -380,6 +405,7 @@ export async function deleteHardban(
 
 // --- CASES DATA ---
 
+// fetch a single specific case by its ID
 export async function getCaseData(id: string): Promise<CaseData | null> {
   return casesCache.getOrFetch(id, async () => {
     const { data } = await supabase
@@ -389,33 +415,33 @@ export async function getCaseData(id: string): Promise<CaseData | null> {
       .single();
 
     return data || null;
-  });
+  }) as Promise<CaseData | null>; // cast required because the cache accepts both arrays and objects
 }
 
-export async function getMemberCases(
-  user_id: string,
-  guild_id: string,
-): Promise<CaseData[]> {
-  const key = `${user_id}-${guild_id}`;
+// fetch all moderation cases tied to a specific guild
+export async function getCasesData(guild_id: string): Promise<CaseData[]> {
+  const key = `guild_cases_${guild_id}`;
 
   return casesCache.getOrFetch(key, async () => {
     const { data, error } = await supabase
       .from("cases")
       .select("*")
-      .eq("user_id", user_id)
       .eq("guild_id", guild_id);
 
     if (error) {
-      logging.error(`failed to fetch member cases: ${error.message}`);
+      logging.error(
+        `failed to fetch cases for guild ${guild_id}: ${error.message}`,
+      );
       return [];
     }
 
     return data || [];
-  });
+  }) as Promise<CaseData[]>;
 }
 
+// log a new moderation action as a case
 export async function createCase(
-  data: Partial<CaseData>, // partial because id and created_at are generated by the db
+  data: Partial<CaseData>,
 ): Promise<CaseData | null> {
   if (data.guild_id) await getGuildData(data.guild_id, true);
   if (data.user_id) await getUserData(data.user_id, true);
@@ -431,17 +457,18 @@ export async function createCase(
     return null;
   }
 
-  // cache the single case
+  // cache the newly created individual case
   casesCache.set(inserted.id, inserted);
 
-  // if this case is tied to a user, wipe their array cache so it updates on next fetch
-  if (inserted.user_id && inserted.guild_id) {
-    casesCache.delete(`${inserted.user_id}-${inserted.guild_id}`);
+  // wipe the guild's case list cache so the new case appears next time it's fetched
+  if (inserted.guild_id) {
+    casesCache.delete(`guild_cases_${inserted.guild_id}`);
   }
 
   return inserted;
 }
 
+// edit an existing case (e.g., updating a reason)
 export async function updateCase(
   id: string,
   data: Partial<CaseData>,
@@ -452,27 +479,28 @@ export async function updateCase(
   if (current) {
     casesCache.set(id, { ...current, ...data });
 
-    // flush the member cases cache just in case we changed something important
-    if (current.user_id && current.guild_id) {
-      casesCache.delete(`${current.user_id}-${current.guild_id}`);
+    // flush the guild's cases list to ensure lists stay accurate
+    if (current.guild_id) {
+      casesCache.delete(`guild_cases_${current.guild_id}`);
     }
   }
 }
 
+// permanently delete a case
 export async function deleteCase(id: string): Promise<void> {
-  // fetch it first so we know whose member array to clear
   const current = await getCaseData(id);
 
   await supabase.from("cases").delete().eq("id", id);
   casesCache.delete(id);
 
-  if (current?.user_id && current?.guild_id) {
-    casesCache.delete(`${current.user_id}-${current.guild_id}`);
+  if (current?.guild_id) {
+    casesCache.delete(`guild_cases_${current.guild_id}`);
   }
 }
 
 // --- DISABLE COMMAND DATA ---
 
+// fetch a guild's list of disabled commands
 export async function getDisabledCommandData(
   guild_id: string,
   autoCreate: boolean = true,
@@ -500,6 +528,7 @@ export async function getDisabledCommandData(
   });
 }
 
+// append or remove commands from a guild's disabled commands list
 export async function updateDisabledCommandData(
   guild_id: string,
   data: Partial<DisabledCommandData>,
@@ -513,6 +542,7 @@ export async function updateDisabledCommandData(
   if (current) disabledCommandsCache.set(guild_id, { ...current, ...data });
 }
 
+// delete a guild's disabled command record entirely
 export async function deleteDisabledCommandData(
   guild_id: string,
 ): Promise<void> {
@@ -520,6 +550,7 @@ export async function deleteDisabledCommandData(
   disabledCommandsCache.delete(guild_id);
 }
 
+// manually flush a guild's disabled commands from local memory
 export async function dumpDisabledCommandData(guild_id: string): Promise<void> {
   disabledCommandsCache.delete(guild_id);
 }
