@@ -251,3 +251,103 @@ export class Paginator<T> {
     });
   }
 }
+
+export class ConfirmationView {
+  public value: boolean | null = null;
+  private userId: string;
+  private timeout: number;
+
+  // set up the confirmation view with the target user's ID and an optional timeout (default: 60s)
+  constructor(userId: string, timeout: number = 60000) {
+    this.userId = userId;
+    this.timeout = timeout;
+  }
+
+  // generates the ActionRow containing the Confirm and Decline buttons
+  public getRow(disabled: boolean = false): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("confirm_yes")
+        .setLabel("Confirm")
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(disabled),
+
+      new ButtonBuilder()
+        .setCustomId("confirm_no")
+        .setLabel("Decline")
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(disabled),
+    );
+  }
+
+  // listens for the button click and returns true if accepted, false if declined, or null if it timed out
+  public async wait(promptMessage: Message): Promise<boolean | null> {
+    try {
+      // wait for a button click on the provided message
+      const interaction = await promptMessage.awaitMessageComponent({
+        filter: (i) => {
+          // reject clicks from anyone who isn't the intended user
+          if (i.user.id !== this.userId) {
+            i.reply({
+              embeds: [
+                Embeds.warning(
+                  // fixed bug: used i.user instead of interaction.user
+                  `${i.user}: You don't **own this embed**.`,
+                ),
+              ],
+              flags: MessageFlags.Ephemeral,
+            }).catch(() => null);
+            return false;
+          }
+          return true; // allow the click to pass through
+        },
+        time: this.timeout,
+        componentType: ComponentType.Button,
+      });
+
+      // determine if they clicked yes or no
+      this.value = interaction.customId === "confirm_yes";
+
+      // automatically disable the buttons now that a choice was made
+      await interaction.update({ components: [this.getRow(true)] });
+
+      return this.value;
+    } catch (error) {
+      // if it hits the catch block, it means the collector timed out.
+      this.value = null;
+
+      // edit the original message to disable the buttons so they can't be clicked anymore
+      await promptMessage
+        .edit({ components: [this.getRow(true)] })
+        .catch(() => null);
+
+      return null;
+    }
+  }
+}
+
+export async function sendConfirmationView(
+  message: Message,
+  text: string,
+): Promise<boolean | null> {
+  // create a new view locked to the command author, timing out after 15 seconds
+  const view = new ConfirmationView(message.author.id, 15000);
+
+  // send the prompt message with the buttons attached (added missing 'await')
+  const promptMessage = await send(message, {
+    embeds: [Embeds.warning(text)], // no need for `${text}` string interpolation here
+    components: [view.getRow()],
+  });
+
+  // if the bot failed to send the message, safely abort
+  if (!promptMessage) return null;
+
+  // wait for the user to click a button or for the 15-second timer to run out
+  const confirmed = await view.wait(promptMessage);
+
+  // clean up the prompt message to keep the channel tidy
+  await promptMessage.delete().catch(() => null);
+
+  // returns true (yes), false (no), or null (timeout)
+  return confirmed;
+}
