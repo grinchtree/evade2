@@ -6,11 +6,14 @@ import type { Command } from "../interfaces/Command";
 import { formatPermissions } from "../utils/formatters";
 import { Colours, Embeds, Emojis, send } from "../utils/messaging";
 import { logging } from "../utils/logging";
+import { getPrefixData } from "../database/helpers";
 
 const event: Event = {
   name: Events.MessageCreate,
   execute: async (message: Message, client: evClient) => {
-    let prefix = config.prefix;
+    const prefix = message.guild
+      ? await getPrefixData(message.guild.id)
+      : config.prefix;
 
     // ignore other bots and messages that don't start with our prefix
     if (message.author.bot || !message.content.startsWith(prefix)) return;
