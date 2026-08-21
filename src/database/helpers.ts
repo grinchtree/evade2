@@ -12,6 +12,7 @@ import type {
   AntinukeData,
   PrefixData,
   WarningData,
+  DisabledCommandData,
 } from "../interfaces/Data";
 
 // data caches (allowing nulls so we don't spam the db for things we already know don't exist)
@@ -23,6 +24,10 @@ const hardbanCache = new DatabaseCache<HardbanData | null>(1000, 260000);
 const antinukeCache = new DatabaseCache<AntinukeData | null>(1000, 260000);
 const prefixCache = new DatabaseCache<PrefixData>(1000, 260000);
 const warningsCache = new DatabaseCache<WarningData[]>(1000, 300000);
+const disabledCommandsCache = new DatabaseCache<DisabledCommandData>(
+  1000,
+  300000,
+);
 
 // --- GUILD DATA ---
 
@@ -464,4 +469,53 @@ export async function deleteCase(id: string): Promise<void> {
   if (current?.user_id && current?.guild_id) {
     casesCache.delete(`${current.user_id}-${current.guild_id}`);
   }
+}
+
+// --- DISABLE COMMAND DATA ---
+
+export async function getDisabledCommandData(
+  guild_id: string,
+  autoCreate: boolean = true,
+): Promise<DisabledCommandData | null> {
+  return disabledCommandsCache.getOrFetch(guild_id, async () => {
+    const { data } = await supabase
+      .from("disabled_commands")
+      .select("*")
+      .eq("guild_id", guild_id)
+      .single();
+
+    if (data) return data;
+
+    if (autoCreate) {
+      const newDisabledCommands: DisabledCommandData = {
+        guild_id,
+        command_names: [],
+      };
+
+      await supabase.from("disabled_commands").insert(newDisabledCommands);
+      return newDisabledCommands;
+    }
+
+    return null;
+  });
+}
+
+export async function updateDisabledCommandData(
+  guild_id: string,
+  data: Partial<DisabledCommandData>,
+): Promise<void> {
+  await supabase
+    .from("disabled_commands")
+    .update(data)
+    .eq("guild_id", guild_id);
+
+  const current = await getDisabledCommandData(guild_id, false);
+  if (current) disabledCommandsCache.set(guild_id, { ...current, ...data });
+}
+
+export async function deleteDisabledCommandData(
+  guild_id: string,
+): Promise<void> {
+  await supabase.from("disabled_commands").delete().eq("guild_id", guild_id);
+  disabledCommandsCache.delete(guild_id);
 }

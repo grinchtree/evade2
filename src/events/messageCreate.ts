@@ -6,7 +6,7 @@ import type { Command } from "../interfaces/Command";
 import { formatPermissions } from "../utils/formatters";
 import { Colours, Embeds, Emojis, send } from "../utils/messaging";
 import { logging } from "../utils/logging";
-import { getPrefixData } from "../database/helpers";
+import { getDisabledCommandData, getPrefixData } from "../database/helpers";
 
 const event: Event = {
   name: Events.MessageCreate,
@@ -26,6 +26,10 @@ const event: Event = {
     }
 
     if (!commandName) return;
+
+    const disabledData = await getDisabledCommandData(message.guildId!);
+    const currentDisabled = disabledData?.command_names || [];
+    if (currentDisabled.includes(commandName)) return;
 
     // look for the root command or its alias
     const parentCommand =
