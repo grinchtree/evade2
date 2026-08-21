@@ -519,3 +519,7 @@ export async function deleteDisabledCommandData(
   await supabase.from("disabled_commands").delete().eq("guild_id", guild_id);
   disabledCommandsCache.delete(guild_id);
 }
+
+export async function dumpDisabledCommandData(guild_id: string): Promise<void> {
+  disabledCommandsCache.delete(guild_id);
+}
