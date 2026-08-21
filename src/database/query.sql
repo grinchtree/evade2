@@ -72,14 +72,16 @@ CREATE TABLE IF NOT EXISTS antinuke (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
+CREATE TABLE IF NOT EXISTS disabled_commands (
+  guild_id TEXT PRIMARY KEY REFERENCES guilds(id) ON DELETE CASCADE,
+  command_names TEXT[] DEFAULT '[]',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
 
 -- 3. performance indexes (speeds up the bot's background tasks)
 
--- speeds up checking who needs to be unbanned right now
 CREATE INDEX IF NOT EXISTS idx_tempbans_expires_at ON tempbans(expires_at);
-
--- speeds up commands like "show warnings for user X in server Y"
 CREATE INDEX IF NOT EXISTS idx_warnings_guild_user ON warnings(guild_id, user_id);
-
--- speeds up loading the mod logs for a specific server
 CREATE INDEX IF NOT EXISTS idx_cases_guild ON cases(guild_id);
+CREATE INDEX IF NOT EXISTS idx_disabled_commands ON disabled_commands(guild_id);

@@ -77,3 +77,11 @@ export interface WarningData {
   amount: number;
   created_at?: string;
 }
+
+// guilds disabled commands
+export interface DisabledCommandData {
+  guild_id: string;
+  disabled_commands: string[];
+  created_at?: string;
+  updated_at?: string;
+}
