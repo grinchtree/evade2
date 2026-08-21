@@ -8,6 +8,7 @@ import {
 import type { Command } from "../interfaces/Command";
 import type { evClient } from "../structs/Client";
 import { config } from "../../config";
+import { getPrefixData } from "../database/helpers";
 
 // standard hex colours used across the bot
 export class Colours {
@@ -88,11 +89,15 @@ export class Embeds {
 
   // automatically generates a help menu for a given command
   static async commandExample(
+    message: Message,
     client: evClient,
     command: Command,
     invokedPath?: string,
   ): Promise<EmbedBuilder> {
-    const prefix = config.prefix;
+    const prefix = message.guild
+      ? await getPrefixData(message.guild.id)
+      : config.prefix;
+
     const codeblock = "```";
 
     let targetCommand = command;

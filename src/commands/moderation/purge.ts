@@ -32,7 +32,7 @@ const command: Command = {
   execute: async (client: evClient, message: Message, args: string[]) => {
     if (args.length === 0) {
       await send(message, {
-        embeds: [await Embeds.commandExample(client, command)],
+        embeds: [await Embeds.commandExample(message, client, command)],
       });
       return;
     }

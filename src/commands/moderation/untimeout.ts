@@ -29,7 +29,7 @@ const command: Command = {
     // if no args are given, send the command example instead
     if (args.length === 0) {
       await send(message, {
-        embeds: [await Embeds.commandExample(client, command)],
+        embeds: [await Embeds.commandExample(message, client, command)],
       });
       return;
     }
