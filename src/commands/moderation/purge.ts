@@ -25,18 +25,11 @@ const command: Command = {
 
   cooldown: {
     limit: 1,
-    duration: 7,
+    duration: 5,
     type: "member",
   },
 
   execute: async (client: evClient, message: Message, args: string[]) => {
-    if (args.length === 0) {
-      await send(message, {
-        embeds: [await Embeds.commandExample(message, client, command)],
-      });
-      return;
-    }
-
     let amount: number | undefined;
     let target: GuildMember | User | undefined;
     const unbuiltReason: string[] = [];
@@ -71,14 +64,7 @@ const command: Command = {
 
     // if no amount was found in the arguments, end the command
     if (!amount) {
-      await send(message, {
-        embeds: [
-          Embeds.eyeGlass(
-            `${message.author}: You must specify an **amount** of messages to purge.`,
-          ),
-        ],
-      });
-      return;
+      amount = 30;
     }
 
     // Discord limits bulk deletions to 100 max
