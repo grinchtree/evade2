@@ -409,14 +409,14 @@ export class ConfirmationView {
 
 export async function sendConfirmationView(
   message: Message,
-  text: string,
+  description: string,
 ): Promise<boolean | null> {
   // create a new view locked to the command author, timing out after 15 seconds
   const view = new ConfirmationView(message.author.id, 15000);
 
   // send the prompt message with the buttons attached (added missing 'await')
   const promptMessage = await send(message, {
-    embeds: [Embeds.warning(text)], // no need for `${text}` string interpolation here
+    embeds: [Embeds.warning(description)], // no need for `${text}` string interpolation here
     components: [view.getRow()],
   });
 
