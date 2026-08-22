@@ -2,7 +2,7 @@ import { PermissionFlagsBits, type Message } from "discord.js";
 import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
 import { Colours, Embeds, send } from "../../utils/messaging";
-import { Paginator } from "../../utils/views";
+import { Paginator } from "../../utils/components";
 import {
   getDisabledCommandData,
   getPrefixData,
