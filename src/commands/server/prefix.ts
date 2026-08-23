@@ -1,7 +1,7 @@
 import { PermissionFlagsBits, type Message } from "discord.js";
 import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
-import { Embeds, send } from "../../utils/messaging";
+import { Colours, Embeds, send } from "../../utils/messaging";
 import { setPrefixData } from "../../database/helpers";
 import { config } from "../../../config";
 
@@ -124,8 +124,15 @@ const command: Command = {
   ],
 
   execute: async (client: evClient, message: Message, args: string[]) => {
+    const prefix = message.content.charAt(0);
     await send(message, {
-      embeds: [await Embeds.commandExample(message, client, command)],
+      embeds: [
+        Embeds.custom(
+          "",
+          `${message.author}: The **current prefix** is: \`${prefix}\`.`,
+          Colours.theme,
+        ),
+      ],
     });
   },
 } satisfies Command;
