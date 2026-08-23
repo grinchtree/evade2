@@ -39,14 +39,7 @@ const command: Command = {
           return;
         }
 
-        let unbuiltName: string[] = [];
-
-        for (const arg of args) {
-          // building name
-          unbuiltName.push(arg);
-        }
-
-        const name = unbuiltName.join(" ");
+        const name = args.join(" ");
 
         try {
           // editing server name
