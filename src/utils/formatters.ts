@@ -57,9 +57,13 @@ export function stringToSeconds(input: string): number {
   return totalSeconds;
 }
 
-export function stringFromSeconds(seconds: number): string {
+export function stringFromSeconds(
+  seconds: number,
+  real: boolean = false,
+  separator: string = real ? ", " : " ",
+): string {
   // turn total seconds back into a readable time string
-  if (seconds <= 0) return "0s";
+  if (seconds <= 0) return real ? "0 seconds" : "0s";
 
   // calculate each time unit from the remaining seconds
   const d = Math.floor(seconds / (60 * 60 * 24));
@@ -73,11 +77,19 @@ export function stringFromSeconds(seconds: number): string {
 
   const parts: string[] = [];
 
-  // only include the units that actually have a value
-  if (d > 0) parts.push(`${d}d`);
-  if (h > 0) parts.push(`${h}h`);
-  if (m > 0) parts.push(`${m}m`);
-  if (s > 0 || parts.length === 0) parts.push(`${s}s`);
+  // quick helper to format full words and add an "s" if it's not exactly 1
+  const pluralize = (val: number, word: string) =>
+    `${val} ${word}${val === 1 ? "" : "s"}`;
 
-  return parts.join(" ");
+  // push either the real word format or the short format
+  if (d > 0) parts.push(real ? pluralize(d, "day") : `${d}d`);
+  if (h > 0) parts.push(real ? pluralize(h, "hour") : `${h}h`);
+  if (m > 0) parts.push(real ? pluralize(m, "minute") : `${m}m`);
+
+  if (s > 0 || parts.length === 0) {
+    parts.push(real ? pluralize(s, "second") : `${s}s`);
+  }
+
+  // join the parts using the customized separator
+  return parts.join(separator);
 }
