@@ -416,7 +416,7 @@ export async function sendConfirmationView(
 
   // send the prompt message with the buttons attached (added missing 'await')
   const promptMessage = await send(message, {
-    embeds: [Embeds.warning(description)], // no need for `${text}` string interpolation here
+    embeds: [Embeds.warning(description)],
     components: [view.getRow()],
   });
 
@@ -429,6 +429,5 @@ export async function sendConfirmationView(
   // clean up the prompt message to keep the channel tidy
   await promptMessage.delete().catch(() => null);
 
-  // returns true (yes), false (no), or null (timeout)
   return confirmed;
 }
