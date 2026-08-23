@@ -39,6 +39,7 @@ const command: Command = {
 
           syntax: "",
           example: "",
+
           execute: async (
             client: evClient,
             message: Message,
