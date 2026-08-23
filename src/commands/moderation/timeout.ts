@@ -1,18 +1,23 @@
-import { GuildMember, PermissionFlagsBits, type Message } from "discord.js";
+import {
+  GuildMember,
+  PermissionFlagsBits,
+  User,
+  type Message,
+} from "discord.js";
 import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
 import { Embeds, send } from "../../utils/messaging";
-import { checkHierarchy } from "../../utils/permissions";
 import { promiseMember } from "../../utils/promise";
 import {
   clampNumber,
   stringFromSeconds,
   stringToSeconds,
 } from "../../utils/formatters";
+import { checkHierarchy } from "../../utils/permissions";
 
 const command: Command = {
   name: "timeout",
-  description: "Timeout a member for a specified amount of time.",
+  description: "Timeout a member from a given amount of time.",
 
   aliases: ["to"],
 
@@ -21,16 +26,15 @@ const command: Command = {
   requiredClientPermissions: [PermissionFlagsBits.ModerateMembers],
 
   syntax: "(member) [duration] [reason]",
-  example: "evade 30m",
+  example: "evade 5m Spamming",
 
   cooldown: {
-    limit: 3,
+    limit: 2,
     duration: 10,
     type: "member",
   },
 
   execute: async (client: evClient, message: Message, args: string[]) => {
-    // if no args are given, send the command example instead
     if (args.length === 0) {
       await send(message, {
         embeds: [await Embeds.commandExample(message, client, command)],
@@ -38,87 +42,59 @@ const command: Command = {
       return;
     }
 
-    // variables that will be later assigned to
-    let target: GuildMember | undefined;
-    let timeoutDuration: number | undefined;
-    const unbuiltReason = [];
+    let targetArg = args[0];
+    let targetMember: GuildMember | undefined = await promiseMember(
+      message.guild!,
+      String(targetArg),
+    );
+    let targetUser: User | undefined = targetMember?.user;
 
-    // assigning values to variables
-    for (const arg of args) {
-      if (!target) {
-        let attempt: GuildMember | undefined = await promiseMember(
-          message.guild!,
-          arg,
-        );
-
-        // assign
-        if (attempt) {
-          target = attempt;
-          continue;
-        }
-      }
-
-      if (!timeoutDuration) {
-        let attempt: number | undefined;
-
-        try {
-          // attempt to get a valid value
-          attempt = stringToSeconds(arg);
-        } catch {
-          // if failed, assign undefined
-          attempt = undefined;
-        }
-        if (attempt) {
-          // if attempt was successful, assign
-          timeoutDuration = attempt;
-          continue;
-        }
-      }
-
-      // all other invalid arguments are just used as the reason
-      unbuiltReason.push(arg);
-    }
-
-    if (!target) {
-      // if not target after trying to assign arguments, end command
+    if (!targetMember) {
       await send(message, {
         embeds: [
           Embeds.eyeGlass(
-            `${message.author}: I **couldn't find** a **member**** by: \`${args[0]}\`.`,
+            `${message.author}: I couldn't find **a member** by: \`${targetArg}\`. Try using their **ID** instead.`,
           ),
         ],
       });
       return;
     }
 
-    const reason = unbuiltReason.join(" ") || "No reason provided."; // build reason
+    const isSafe = await checkHierarchy(message, targetMember, "kick");
+    if (!isSafe) return;
 
-    const isSafe = await checkHierarchy(message, target, "timeout");
-    if (!isSafe) return; // not safe to timeout target, end command
+    let timeoutSeconds: number | undefined;
+    let reasonArgs = args.slice(1);
+
+    if (reasonArgs.length > 0) {
+      const parsedSeconds = stringToSeconds(String(reasonArgs[0]));
+
+      if (parsedSeconds) {
+        timeoutSeconds = clampNumber(parsedSeconds, 5, 60 * 60 * 24 * 28 - 1);
+        reasonArgs = reasonArgs.slice(1);
+      }
+    }
+
+    const reason = reasonArgs.join(" ") || "No reason provided.";
+
+    if (!timeoutSeconds) {
+      timeoutSeconds = 60;
+    }
 
     try {
-      // timeout
-      if (!timeoutDuration) {
-        // default to 60 seconds
-        timeoutDuration = 60;
-      }
-      timeoutDuration = clampNumber(timeoutDuration, 5, 60 * 60 * 24 * 28);
-
-      await target.timeout(
-        timeoutDuration * 1000,
-        `${message.author.username} (ID: ${message.author.id}) / ${reason}`,
+      await targetMember.timeout(
+        timeoutSeconds * 1000,
+        `${message.author.username} (ID: ${message.author.id} / ${reason})`,
       );
 
-      // send success message
       await send(message, {
         embeds: [
           Embeds.approve(
-            `${message.author}: **${target.displayName}** has been **timedout** for \`${stringFromSeconds(timeoutDuration)}\`.`,
+            `${message.author}: **${targetUser ? targetUser.username : targetMember.displayName}** was **timedout** for: \`${stringFromSeconds(timeoutSeconds)}\`.`,
           ),
         ],
       });
     } catch (error) {
-      // most errors are automatically handled, this is down to http.
       await send(message, {
         embeds: [Embeds.deny(`${message.author}: ${error}.`)],
       });

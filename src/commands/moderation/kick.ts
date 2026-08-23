@@ -1,9 +1,15 @@
-import { GuildMember, PermissionFlagsBits, type Message } from "discord.js";
+import {
+  GuildMember,
+  PermissionFlagsBits,
+  User,
+  type Message,
+} from "discord.js";
 import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
 import { Embeds, send } from "../../utils/messaging";
-import { promiseMember } from "../../utils/promise";
+import { promiseMember, promiseUser } from "../../utils/promise";
 import { checkHierarchy } from "../../utils/permissions";
+import { sendConfirmationView } from "../../utils/components";
 
 const command: Command = {
   name: "kick",
@@ -14,16 +20,15 @@ const command: Command = {
   requiredClientPermissions: [PermissionFlagsBits.KickMembers],
 
   syntax: "(member) [reason]",
-  example: "evade",
+  example: "evade Annoying members",
 
   cooldown: {
-    limit: 3,
-    duration: 10,
+    limit: 1,
+    duration: 7,
     type: "member",
   },
 
   execute: async (client: evClient, message: Message, args: string[]) => {
-    // if no args are given, send the command example instead
     if (args.length === 0) {
       await send(message, {
         embeds: [await Embeds.commandExample(message, client, command)],
@@ -31,62 +36,49 @@ const command: Command = {
       return;
     }
 
-    // variables that will be later assigned to
-    let target: GuildMember | undefined;
-    const unbuiltReason = [];
+    const targetArg = args[0];
+    let targetMember: GuildMember | undefined = await promiseMember(
+      message.guild!,
+      String(targetArg),
+    );
+    let targetUser: User | undefined = targetMember?.user;
 
-    // assigning values to variables
-    for (const arg of args) {
-      if (!target) {
-        let attempt: GuildMember | undefined = await promiseMember(
-          message.guild!,
-          arg,
-        );
-
-        // assign
-        if (attempt) {
-          target = attempt;
-          continue;
-        }
-      }
-
-      // all other invalid arguments are just used as the reason
-      unbuiltReason.push(arg);
-    }
-
-    if (!target) {
-      // if not target after trying to assign arguments, end command
+    if (!targetMember) {
       await send(message, {
         embeds: [
           Embeds.eyeGlass(
-            `${message.author}: I **couldn't find** a **member**** by: \`${args[0]}\`.`,
+            `${message.author}: I couldn't find **a member** by: \`${targetArg}\`. Try using their **ID** instead.`,
           ),
         ],
       });
       return;
     }
 
-    const reason = unbuiltReason.join(" ") || "No reason provided."; // build reason
+    if (targetMember.premiumSince) {
+      const confirmed = await sendConfirmationView(
+        message,
+        `${message.author}: Are you sure you want to **ban ${targetMember}**? They are **boosting the server**.`,
+      );
+      if (!confirmed) return;
+    }
 
-    const isSafe = await checkHierarchy(message, target, "kick");
-    if (!isSafe) return; // not safe to kick target, end command
+    const isSafe = await checkHierarchy(message, targetMember, "kick");
+    if (!isSafe) return;
+
+    let reason = args.slice(1).join(" ") || "No reason provided.";
 
     try {
-      // kick
-      await target.kick(
+      await targetMember.kick(
         `${message.author.username} (ID: ${message.author.id}) / ${reason}`,
       );
-
-      // send success message
       await send(message, {
         embeds: [
           Embeds.approve(
-            `${message.author}: **${target.displayName}** has been **kicked** from the server.`,
+            `${message.author}: **${targetUser ? targetUser.username : targetMember.displayName}** has been **kicked** from the server.`,
           ),
         ],
       });
     } catch (error) {
-      // most errors are automatically handled, this is down to http.
       await send(message, {
         embeds: [Embeds.deny(`${message.author}: ${error}.`)],
       });

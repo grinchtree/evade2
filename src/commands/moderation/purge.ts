@@ -6,9 +6,9 @@ import {
 } from "discord.js";
 import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
-import { Embeds, send } from "../../utils/messaging";
 import { promiseMember, promiseUser } from "../../utils/promise";
 import { clampNumber } from "../../utils/formatters";
+import { Embeds, send } from "../../utils/messaging";
 
 const command: Command = {
   name: "purge",
@@ -20,8 +20,8 @@ const command: Command = {
   requiredUserPermissions: [PermissionFlagsBits.ManageMessages],
   requiredClientPermissions: [PermissionFlagsBits.ManageMessages],
 
-  syntax: "<amount> [user]",
-  example: "30 evade",
+  syntax: "[amount]",
+  example: "30",
 
   cooldown: {
     limit: 1,
@@ -32,14 +32,11 @@ const command: Command = {
   execute: async (client: evClient, message: Message, args: string[]) => {
     let amount: number | undefined;
     let target: GuildMember | User | undefined;
-    const unbuiltReason: string[] = [];
 
-    // assigning values to variables
     for (const arg of args) {
-      // safely parse strict numbers for the amount
       if (!amount && /^\d+$/.test(arg)) {
         amount = parseInt(arg, 10);
-        continue; // skip adding this to the target check or reason
+        continue;
       }
 
       if (!target) {
@@ -47,81 +44,77 @@ const command: Command = {
           message.guild!,
           arg,
         );
-
         if (!attempt) {
           attempt = await promiseUser(client, arg);
         }
 
         if (attempt) {
           target = attempt;
-          continue; // skip adding this to the reason
+          continue;
         }
       }
-
-      // all other invalid arguments are just used as the reason
-      unbuiltReason.push(arg);
     }
 
-    // if no amount was found in the arguments, end the command
-    if (!amount) {
-      amount = 30;
-    }
-
-    // Discord limits bulk deletions to 100 max
+    if (!amount) amount = 30;
     amount = clampNumber(amount, 1, 100);
-    const reason = unbuiltReason.join(" ") || "No reason provided.";
 
-    // make sure this is a text channel that supports bulkDelete
     if (!message.channel.isTextBased() || message.channel.isDMBased()) return;
 
     try {
-      // delete the user's command message so it doesn't mess up the count
-      await message.delete().catch(() => null);
-
       let deletedCount = 0;
 
+      await message.delete().catch(() => null);
+
       if (target) {
-        // if a target is specified, fetch messages and filter by that user
         const fetched = await message.channel.messages.fetch({ limit: amount });
         const targetMessages = fetched.filter(
           (m) => m.author.id === target?.id,
         );
 
         if (targetMessages.size === 0) {
-          const msg = await message.channel.send({
+          const msg = await send(message, {
             embeds: [
-              Embeds.deny(
-                `${message.author}: No recent messages found for that user.`,
+              Embeds.eyeGlass(
+                `${message.author}: I **couldn't find any messages** (try a bigger search?).`,
               ),
             ],
           });
-          setTimeout(() => msg.delete().catch(() => null), 5000);
+          setTimeout(() => {
+            msg.delete().catch(() => null);
+          }, 5000);
           return;
         }
 
-        // the 'true' argument tells discord to safely ignore messages older than 14 days
         const deleted = await message.channel.bulkDelete(targetMessages, true);
         deletedCount = deleted.size;
       } else {
-        // if no target, just purge the last X amount of messages normally
         const deleted = await message.channel.bulkDelete(amount, true);
         deletedCount = deleted.size;
       }
 
-      // send success message
-      const successMsg = await message.channel.send({
+      const targetName = target
+        ? "user" in target
+          ? target.user.username
+          : target.username
+        : "";
+
+      const msg = await send(message, {
         embeds: [
           Embeds.approve(
-            `${message.author}: Successfully purged **${deletedCount} messages**${target ? ` from **${target.displayName}**` : ""}.`,
+            `${message.author}: Successfully **purged ${deletedCount} ${deletedCount === 1 ? "message" : "messages"}**${target ? ` from **${targetName}**` : ""}.`,
           ),
         ],
       });
-
-      // auto-delete the success message after 5 seconds to keep chat clean
-      setTimeout(() => successMsg.delete().catch(() => null), 5000);
+      setTimeout(() => {
+        msg.delete().catch(() => null);
+      }, 5000);
     } catch (error) {
-      await message.channel.send({
-        embeds: [Embeds.deny(`${message.author}: ${error}`)],
+      await send(message, {
+        embeds: [
+          Embeds.eyeGlass(
+            `${message.author}: I **couldn't find any messages** (try a bigger search?).`,
+          ),
+        ],
       });
     }
   },

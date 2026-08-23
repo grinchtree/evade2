@@ -1,8 +1,9 @@
 import {
   GuildMember,
+  InviteTargetUsersJobStatus,
   PermissionFlagsBits,
-  type Message,
   User,
+  type Message,
 } from "discord.js";
 import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
@@ -12,8 +13,13 @@ import {
   promiseMember,
   promiseUser,
 } from "../../utils/promise";
-import { stringToSeconds } from "../../utils/formatters";
 import { checkHierarchy } from "../../utils/permissions";
+import {
+  clampNumber,
+  stringFromSeconds,
+  stringToSeconds,
+} from "../../utils/formatters";
+import { sendConfirmationView } from "../../utils/components";
 
 const command: Command = {
   name: "ban",
@@ -24,16 +30,15 @@ const command: Command = {
   requiredClientPermissions: [PermissionFlagsBits.BanMembers],
 
   syntax: "(member) [history] [reason]",
-  example: "evade 24h Sending malware links",
+  example: "evade 7d Sending bypassed words",
 
   cooldown: {
-    limit: 3,
+    limit: 2,
     duration: 10,
     type: "member",
   },
 
   execute: async (client: evClient, message: Message, args: string[]) => {
-    // if no args are given, send the command example instead
     if (args.length === 0) {
       await send(message, {
         embeds: [await Embeds.commandExample(message, client, command)],
@@ -41,101 +46,80 @@ const command: Command = {
       return;
     }
 
-    // variables that will be later assigned to
-    let target: User | GuildMember | undefined;
-    let deleteMessageSeconds: number | undefined;
-    const unbuiltReason = [];
+    const targetArg = String(args[0]);
+    let targetMember: GuildMember | undefined = await promiseMember(
+      message.guild!,
+      targetArg,
+    );
+    let targetUser: User | undefined = targetMember?.user;
 
-    // assigning values to variables
-    for (const arg of args) {
-      if (!target) {
-        let attempt: User | GuildMember | undefined = await promiseMember(
-          message.guild!,
-          arg,
-        );
-        // if the member wasn't found, try finding the user
-        if (!attempt) {
-          attempt = await promiseUser(client, arg);
-        }
-
-        // assign
-        if (attempt) {
-          target = attempt;
-          continue;
-        }
-      }
-
-      if (!deleteMessageSeconds) {
-        let attempt: number | undefined;
-
-        try {
-          // attempt to get a valid value
-          attempt = stringToSeconds(arg);
-        } catch {
-          // if failed, assign undefined
-          attempt = undefined;
-        }
-        if (attempt) {
-          // if attempt was successful, assign
-          deleteMessageSeconds = attempt;
-          continue;
-        }
-      }
-
-      // all other invalid arguments are just used as the reason
-      unbuiltReason.push(arg);
+    if (!targetUser) {
+      targetUser = await promiseUser(client, targetArg);
     }
-
-    if (!target) {
-      // if not target after trying to assign arguments, end command
+    if (!targetUser) {
       await send(message, {
         embeds: [
           Embeds.eyeGlass(
-            `${message.author}: I **couldn't find anyone** by: \`${args[0]}\`.`,
+            `${message.author}: I couldn't **a user** by: \`${targetArg}\`. Try using their **ID** instead.`,
           ),
         ],
       });
       return;
     }
 
-    const reason = unbuiltReason.join(" ") || "No reason provided."; // build reason
-
-    if (target instanceof GuildMember) {
-      // if a member, check hierarchy
-      const isSafe = await checkHierarchy(message, target, "ban");
-      if (!isSafe) return; // not safe to ban target, end command
+    if (targetMember?.premiumSince) {
+      const confirmed = await sendConfirmationView(
+        message,
+        `${message.author}: Are you sure you want to **ban ${targetMember}**? They are **boosting the server**.`,
+      );
+      if (!confirmed) return;
     }
 
+    if (targetMember) {
+      const isSafe = await checkHierarchy(message, targetMember, "ban");
+      if (!isSafe) return;
+    }
+
+    let deleteMessageSeconds = 0;
+    let reasonArgs = args.slice(1);
+
+    if (reasonArgs.length > 0) {
+      const parsedSeconds = stringToSeconds(String(reasonArgs[0]));
+
+      if (parsedSeconds) {
+        deleteMessageSeconds = clampNumber(parsedSeconds, 0, 60 * 60 * 24 * 7);
+        reasonArgs = reasonArgs.slice(1);
+      }
+    }
+
+    const reason = reasonArgs.join(" ") || "No reason provided.";
+
     try {
-      const banEntry = await promiseBanEntry(message.guild!, target.id);
+      const banEntry = await promiseBanEntry(message.guild!, targetUser.id);
       if (banEntry) {
-        // if the target is already banned from the server, end command
         await send(message, {
           embeds: [
             Embeds.warning(
-              `${message.author}: **${target.displayName}** is **already banned** from the server.`,
+              `${message.author}: **${targetUser.username}** is **already banned** from the server.`,
             ),
           ],
         });
         return;
       }
 
-      // ban
-      await message.guild!.bans.create(target, {
+      await message.guild!.members.ban(targetUser.id, {
+        deleteMessageSeconds,
         reason: `${message.author.username} (ID: ${message.author.id}) / ${reason}`,
-        deleteMessageSeconds: deleteMessageSeconds || 0,
       });
 
-      // send success message
       await send(message, {
         embeds: [
           Embeds.approve(
-            `${message.author}: **${target.displayName}** has been **banned** from the server.`,
+            `${message.author}: **${targetUser.username}** has been **banned** from the server.`,
           ),
         ],
       });
     } catch (error) {
-      // most errors are automatically handled, this is down to http.
       await send(message, {
         embeds: [Embeds.deny(`${message.author}: ${error}.`)],
       });

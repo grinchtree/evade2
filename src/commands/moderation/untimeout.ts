@@ -1,9 +1,7 @@
-import { GuildMember, PermissionFlagsBits, type Message } from "discord.js";
+import { PermissionFlagsBits, type Message } from "discord.js";
 import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
 import { Embeds, send } from "../../utils/messaging";
-import { clampNumber } from "../../utils/formatters";
-import { checkHierarchy } from "../../utils/permissions";
 import { promiseMember } from "../../utils/promise";
 
 const command: Command = {
@@ -20,13 +18,12 @@ const command: Command = {
   example: "evade",
 
   cooldown: {
-    limit: 3,
+    limit: 2,
     duration: 10,
     type: "member",
   },
 
   execute: async (client: evClient, message: Message, args: string[]) => {
-    // if no args are given, send the command example instead
     if (args.length === 0) {
       await send(message, {
         embeds: [await Embeds.commandExample(message, client, command)],
@@ -34,75 +31,47 @@ const command: Command = {
       return;
     }
 
-    // variables that will be later assigned to
-    let target: GuildMember | undefined;
-    const unbuiltReason = [];
+    let targetArg = args[0];
+    let targetMember = await promiseMember(message.guild!, String(targetArg));
+    let targetUser = targetMember?.user;
 
-    // assigning values to variables
-    for (const arg of args) {
-      if (!target) {
-        let attempt: GuildMember | undefined = await promiseMember(
-          message.guild!,
-          arg,
-        );
-
-        // assign
-        if (attempt) {
-          target = attempt;
-          continue;
-        }
-      }
-
-      // all other invalid arguments are just used as the reason
-      unbuiltReason.push(arg);
-    }
-
-    if (!target) {
-      // if not target after trying to assign arguments, end command
+    if (!targetMember) {
       await send(message, {
         embeds: [
           Embeds.eyeGlass(
-            `${message.author}: I **couldn't find** a **member**** by: \`${args[0]}\`.`,
+            `${message.author}: I couldn't find **a member** by: \`${targetArg}\`. Try using their **ID** instead.`,
           ),
         ],
       });
       return;
     }
 
-    const reason = unbuiltReason.join(" ") || "No reason provided."; // build reason
-
-    const isSafe = await checkHierarchy(message, target, "untimeout");
-    if (!isSafe) return; // not safe to timeout target, end command
+    let reason = args.slice(1).join(" ") || "No reason provided.";
 
     try {
-      if (!target.isCommunicationDisabled()) {
-        // if target is already timedout, end command
+      if (!targetMember.isCommunicationDisabled()) {
         await send(message, {
           embeds: [
             Embeds.warning(
-              `${message.author}: **${target.displayName}** is **not timedout**.`,
+              `${message.author}: **${targetUser ? targetUser.username : targetMember.displayName}** is **not timedout**.`,
             ),
           ],
         });
         return;
       }
 
-      // remove timeout
-      await target.timeout(
+      await targetMember.timeout(
         null,
         `${message.author.username} (ID: ${message.author.id}) / ${reason}`,
       );
-
-      // send success message
       await send(message, {
         embeds: [
           Embeds.approve(
-            `${message.author}: **${target.displayName}'s** timeout has been **removed**.`,
+            `${message.author}: Successfully **removed timeout** from **${targetUser ? targetUser.username : targetMember.displayName}**.`,
           ),
         ],
       });
     } catch (error) {
-      // most errors are automatically handled, this is down to http.
       await send(message, {
         embeds: [Embeds.deny(`${message.author}: ${error}.`)],
       });
