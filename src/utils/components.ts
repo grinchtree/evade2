@@ -170,7 +170,7 @@ export class Paginator<T> {
 
     const collector = paginatorMessage.createMessageComponentCollector({
       componentType: ComponentType.Button,
-      time: this.options.timeout ?? 60000,
+      time: this.options.timeout ?? 30000,
     });
 
     collector.on("collect", async (interaction) => {
@@ -339,7 +339,7 @@ export class ConfirmationView {
   private timeout: number;
 
   // set up the confirmation view with the target user's ID and an optional timeout (default: 60s)
-  constructor(userId: string, timeout: number = 60000) {
+  constructor(userId: string, timeout: number = 30000) {
     this.userId = userId;
     this.timeout = timeout;
   }
@@ -412,7 +412,7 @@ export async function sendConfirmationView(
   description: string,
 ): Promise<boolean | null> {
   // create a new view locked to the command author, timing out after 15 seconds
-  const view = new ConfirmationView(message.author.id, 15000);
+  const view = new ConfirmationView(message.author.id, 30000);
 
   // send the prompt message with the buttons attached (added missing 'await')
   const promptMessage = await send(message, {
