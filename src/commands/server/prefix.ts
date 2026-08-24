@@ -28,8 +28,8 @@ const command: Command = {
 
       cooldown: {
         limit: 1,
-        duration: 10,
-        type: "member",
+        duration: 30,
+        type: "guild",
       },
 
       execute: async (client: evClient, message: Message, args: string[]) => {
@@ -94,8 +94,8 @@ const command: Command = {
 
       cooldown: {
         limit: 1,
-        duration: 10,
-        type: "member",
+        duration: 30,
+        type: "guild",
       },
 
       execute: async (client: evClient, message: Message, args: string[]) => {

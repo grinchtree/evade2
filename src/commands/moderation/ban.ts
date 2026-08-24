@@ -14,11 +14,7 @@ import {
   promiseUser,
 } from "../../utils/promise";
 import { checkHierarchy } from "../../utils/permissions";
-import {
-  clampNumber,
-  stringFromSeconds,
-  stringToSeconds,
-} from "../../utils/formatters";
+import { clampNumber, stringToSeconds } from "../../utils/formatters";
 import { sendConfirmationView } from "../../utils/components";
 
 const command: Command = {
@@ -34,7 +30,7 @@ const command: Command = {
 
   cooldown: {
     limit: 2,
-    duration: 10,
+    duration: 5,
     type: "member",
   },
 

@@ -33,7 +33,7 @@ const command: Command = {
 
   cooldown: {
     limit: 2,
-    duration: 10,
+    duration: 5,
     type: "member",
   },
 

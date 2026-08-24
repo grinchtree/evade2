@@ -29,8 +29,8 @@ const command: Command = {
   example: "evade 5m Spamming",
 
   cooldown: {
-    limit: 2,
-    duration: 10,
+    limit: 3,
+    duration: 5,
     type: "member",
   },
 

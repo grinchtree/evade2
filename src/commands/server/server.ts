@@ -30,6 +30,12 @@ const command: Command = {
       syntax: "(name)",
       example: "Evade's Awesome Server",
 
+      cooldown: {
+        limit: 1,
+        duration: 60 * 5,
+        type: "guild",
+      },
+
       execute: async (client: evClient, message: Message, args: string[]) => {
         // if no args are given, send the command example instead
         if (args.length === 0) {
@@ -73,6 +79,12 @@ const command: Command = {
 
       syntax: "(attachment)",
       example: "https://pfp.com/img.png",
+
+      cooldown: {
+        limit: 1,
+        duration: 60 * 5,
+        type: "guild",
+      },
 
       execute: async (client: evClient, message: Message, args: string[]) => {
         const attachment = message.attachments.first(); // getting the first provided attachment
