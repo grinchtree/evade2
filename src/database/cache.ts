@@ -190,4 +190,39 @@ export class DatabaseCache<T> {
   public getSize(): number {
     return this.cache.size;
   }
+
+  // --- memory helpers ---
+
+  // proactively clears out expired items to free up ram immediately.
+  public sweep(): number {
+    const expiredKeys: string[] = [];
+    const now = Date.now();
+
+    for (const [key, item] of this.cache.entries()) {
+      if (now > item.expiresAt) {
+        expiredKeys.push(key);
+      }
+    }
+
+    this.cleanExpiredDuringIteration(expiredKeys);
+    return expiredKeys.length; // returns how many items were garbage collected
+  }
+
+  // forces the cache down to a specific size by dropping the oldest items.
+  public trim(targetSize: number = Math.floor(this.maxSize * 0.8)): number {
+    if (this.cache.size <= targetSize) return 0;
+
+    let removed = 0;
+    while (this.cache.size > targetSize) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.delete(oldestKey);
+        removed++;
+      } else {
+        break;
+      }
+    }
+
+    return removed;
+  }
 }
