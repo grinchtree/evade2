@@ -35,9 +35,7 @@ const command: Command = {
 
   aliases: ["lyrics"],
 
-  guild_only: false,
-
-  syntax: "(song name)",
+  syntax: "(song)",
   example: "Last Christmas by Wham!",
 
   cooldown: {

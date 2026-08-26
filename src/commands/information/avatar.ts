@@ -23,7 +23,7 @@ const command: Command = {
   cooldown: {
     limit: 2,
     duration: 5,
-    type: "member",
+    type: "user",
   },
 
   execute: async (client: evClient, message: Message, args: string[]) => {
