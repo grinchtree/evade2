@@ -1,61 +1,87 @@
-export class DatabaseCache<T> {
-  // holds the actual cached data with an expiration timestamp
-  private cache = new Map<string, { value: T; expiresAt: number }>();
+type CacheItem<T> = {
+  value: T;
+  expiresAt: number;
+  namespace?: string;
+};
 
-  // keeps track of ongoing fetch requests to prevent duplicate database calls
+export class DatabaseCache<T> {
+  // main storage
+  private cache = new Map<string, CacheItem<T>>();
+
+  // tracks ongoing requests to prevent duplicates
   private pendingFetches = new Map<string, Promise<T>>();
+
+  // groups keys by a namespace for quick wipes
+  private namespaces = new Map<string, Set<string>>();
 
   private maxSize: number;
   private ttl: number;
 
-  constructor(maxSize: number = 1000, ttlMilliseconds: number = 600000) {
+  constructor(maxSize: number = 5000, ttlMilliseconds: number = 600000) {
     this.maxSize = maxSize;
     this.ttl = ttlMilliseconds;
   }
-
-  // --- BASIC READ / WRITE ---
 
   public get(key: string): T | undefined {
     const item = this.cache.get(key);
     if (!item) return undefined;
 
-    // quietly remove the item if it has expired
+    // drop it if it expired
     if (Date.now() > item.expiresAt) {
-      this.cache.delete(key);
+      this.delete(key);
       return undefined;
     }
+
+    // bump to the back so it stays alive
+    this.cache.delete(key);
+    this.cache.set(key, item);
 
     return item.value;
   }
 
-  public set(key: string, value: T): void {
-    // if we hit the limit, delete the oldest item (the first key in the map)
-    if (this.cache.size >= this.maxSize) {
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey !== undefined) this.cache.delete(firstKey);
+  public set(key: string, value: T, namespace?: string): void {
+    // clear old one to reset its position
+    if (this.cache.has(key)) {
+      this.delete(key);
     }
 
-    this.cache.set(key, { value, expiresAt: Date.now() + this.ttl });
+    // drop the oldest item if we hit the limit
+    if (this.cache.size >= this.maxSize) {
+      const lruKey = this.cache.keys().next().value;
+      if (lruKey !== undefined) this.delete(lruKey);
+    }
+
+    this.cache.set(key, { value, expiresAt: Date.now() + this.ttl, namespace });
+
+    // track the namespace if provided
+    if (namespace) {
+      let nsSet = this.namespaces.get(namespace);
+      if (!nsSet) {
+        nsSet = new Set<string>();
+        this.namespaces.set(namespace, nsSet);
+      }
+      nsSet.add(key);
+    }
   }
 
-  // safely get a value, or fetch it asynchronously without duplicating requests
-  public async getOrFetch(key: string, fetcher: () => Promise<T>): Promise<T> {
+  public async getOrFetch(
+    key: string,
+    fetcher: () => Promise<T>,
+    namespace?: string,
+  ): Promise<T> {
     const cached = this.get(key);
     if (cached !== undefined) return cached;
 
-    // if someone else is already fetching this exact key, wait for their result
     const pending = this.pendingFetches.get(key);
     if (pending) return pending;
 
-    // start a new fetch request
     const fetchPromise = fetcher()
       .then((value) => {
-        this.set(key, value);
+        this.set(key, value, namespace);
         this.pendingFetches.delete(key);
         return value;
       })
       .catch((error) => {
-        // clean up on failure so we can safely try again later
         this.pendingFetches.delete(key);
         throw error;
       });
@@ -64,147 +90,93 @@ export class DatabaseCache<T> {
     return fetchPromise;
   }
 
-  // --- ADVANCED FETCHING ---
+  public getByNamespace(namespace: string): { key: string; value: T }[] {
+    const nsSet = this.namespaces.get(namespace);
+    if (!nsSet) return [];
 
-  // fetch multiple exact keys at once
-  public getMultiple(keys: string[]): { key: string; value: T }[] {
     const results: { key: string; value: T }[] = [];
-    for (const key of keys) {
-      const value = this.get(key);
-      if (value !== undefined) results.push({ key, value });
+
+    for (const key of nsSet) {
+      const val = this.get(key);
+      if (val !== undefined) {
+        results.push({ key, value: val });
+      }
     }
     return results;
   }
 
-  // fetch all items where the key starts with a specific string
+  public deleteByNamespace(namespace: string): void {
+    const nsSet = this.namespaces.get(namespace);
+    if (!nsSet) return;
+
+    for (const key of nsSet) {
+      this.cache.delete(key);
+    }
+    this.namespaces.delete(namespace);
+  }
+
+  private cleanExpiredDuringIteration(expiredKeys: string[]) {
+    for (const key of expiredKeys) {
+      this.delete(key);
+    }
+  }
+
   public getStartsWith(prefix: string): { key: string; value: T }[] {
     const results: { key: string; value: T }[] = [];
+    const expiredKeys: string[] = [];
     const now = Date.now();
 
     for (const [key, item] of this.cache.entries()) {
       if (key.startsWith(prefix)) {
         if (now > item.expiresAt) {
-          this.cache.delete(key);
+          expiredKeys.push(key);
         } else {
           results.push({ key, value: item.value });
         }
       }
     }
+
+    this.cleanExpiredDuringIteration(expiredKeys);
     return results;
   }
 
-  // fetch all items where the key ends with a specific string
-  public getEndsWith(suffix: string): { key: string; value: T }[] {
-    const results: { key: string; value: T }[] = [];
-    const now = Date.now();
-
-    for (const [key, item] of this.cache.entries()) {
-      if (key.endsWith(suffix)) {
-        if (now > item.expiresAt) {
-          this.cache.delete(key);
-        } else {
-          results.push({ key, value: item.value });
-        }
-      }
-    }
-    return results;
-  }
-
-  // fuzzy search: fetch all items where the key includes a specific string
-  public fuzzyGet(
-    query: string,
-    caseSensitive: boolean = false,
-  ): { key: string; value: T }[] {
-    const results: { key: string; value: T }[] = [];
-    const now = Date.now();
-    const searchQuery = caseSensitive ? query : query.toLowerCase();
-
-    for (const [key, item] of this.cache.entries()) {
-      const targetKey = caseSensitive ? key : key.toLowerCase();
-
-      if (targetKey.includes(searchQuery)) {
-        if (now > item.expiresAt) {
-          this.cache.delete(key);
-        } else {
-          results.push({ key, value: item.value });
-        }
-      }
-    }
-    return results;
-  }
-
-  // grab absolutely everything currently valid in the cache
-  public getAll(): { key: string; value: T }[] {
-    const results: { key: string; value: T }[] = [];
-    const now = Date.now();
-
-    for (const [key, item] of this.cache.entries()) {
-      if (now > item.expiresAt) {
-        this.cache.delete(key);
-      } else {
-        results.push({ key, value: item.value });
-      }
-    }
-    return results;
-  }
-
-  // --- DELETION ---
-
-  // delete a specific, exact key
   public delete(key: string): void {
-    this.cache.delete(key);
-  }
+    const item = this.cache.get(key);
+    if (!item) return;
 
-  // delete all keys that start with a specific string
-  public deleteStartsWith(prefix: string): void {
-    for (const key of this.cache.keys()) {
-      if (key.startsWith(prefix)) this.cache.delete(key);
-    }
-  }
-
-  // delete all keys that end with a specific string
-  public deleteEndsWith(suffix: string): void {
-    for (const key of this.cache.keys()) {
-      if (key.endsWith(suffix)) this.cache.delete(key);
-    }
-  }
-
-  // fuzzy delete: delete all keys that contain a specific string
-  public fuzzyDelete(query: string, caseSensitive: boolean = false): void {
-    const searchQuery = caseSensitive ? query : query.toLowerCase();
-
-    for (const key of this.cache.keys()) {
-      const targetKey = caseSensitive ? key : key.toLowerCase();
-      if (targetKey.includes(searchQuery)) {
-        this.cache.delete(key);
+    // clean up from the namespace group
+    if (item.namespace) {
+      const nsSet = this.namespaces.get(item.namespace);
+      if (nsSet) {
+        nsSet.delete(key);
+        if (nsSet.size === 0) this.namespaces.delete(item.namespace);
       }
     }
+
+    this.cache.delete(key);
   }
 
   public clear(): void {
     this.cache.clear();
+    this.namespaces.clear();
     this.pendingFetches.clear();
   }
 
-  // --- UTILITIES ---
-
-  // check if a key exists without resetting its ttl or triggering a fetch
   public has(key: string): boolean {
     const item = this.cache.get(key);
     if (!item) return false;
 
     if (Date.now() > item.expiresAt) {
-      this.cache.delete(key);
+      this.delete(key);
       return false;
     }
     return true;
   }
 
-  // extend the life of an item in the cache (defaults to resetting it back to max ttl)
   public extendTTL(key: string, extraMilliseconds?: number): boolean {
     const item = this.cache.get(key);
     if (!item || Date.now() > item.expiresAt) {
-      this.cache.delete(key);
+      this.delete(key);
       return false;
     }
 
@@ -215,7 +187,6 @@ export class DatabaseCache<T> {
     return true;
   }
 
-  // see how many items are currently stored
   public getSize(): number {
     return this.cache.size;
   }
