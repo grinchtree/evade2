@@ -1,4 +1,5 @@
 import {
+  GuildMember,
   PermissionFlagsBits,
   Role,
   type ColorResolvable,
@@ -10,7 +11,11 @@ import type { evClient } from "../../structs/Client";
 import { Colours, Embeds, Emojis, send } from "../../utils/messaging";
 import { promiseMember, promiseRole } from "../../utils/promise";
 import type { inflateSync } from "bun";
-import { Paginator, sendConfirmationView } from "../../utils/components";
+import {
+  Paginator,
+  sendCancellableTask,
+  sendConfirmationView,
+} from "../../utils/components";
 import { checkRoleHierarchy } from "../../utils/permissions";
 
 const hexRegex = /^#?([a-fA-F0-9]{6}|[a-fA-F0-9]{3})$/;
@@ -220,7 +225,10 @@ const command: Command = {
         try {
           const oldName = targetRole.name;
 
-          await targetRole.edit({ name: name });
+          await targetRole.edit({
+            name: name,
+            reason: `Edited by ${message.author.username} (ID: ${message.author.id})`,
+          });
           await send(message, {
             embeds: [
               Embeds.approve(
@@ -291,6 +299,7 @@ const command: Command = {
             name: name,
             colors: colour,
             hoist: hoist,
+            reason: `Created by ${message.author.username} (ID: ${message.author.id})`,
           });
 
           await send(message, {
@@ -307,6 +316,337 @@ const command: Command = {
         }
       },
     },
+    {
+      name: "hoist",
+      description: "Change a roles hoist.",
+
+      guild_only: true,
+      requiredUserPermissions: [PermissionFlagsBits.ManageRoles],
+      requiredClientPermissions: [PermissionFlagsBits.ManageRoles],
+
+      syntax: "(role) [boolean]",
+      example: "Owner true",
+
+      cooldown: {
+        limit: 2,
+        duration: 10,
+        type: "member",
+      },
+
+      execute: async (client: evClient, message: Message, args: string[]) => {
+        if (args.length === 0) {
+          await send(message, {
+            embeds: [
+              await Embeds.commandExample(
+                message,
+                client,
+                command,
+                "role hoist",
+              ),
+            ],
+          });
+          return;
+        }
+
+        const targetArg = args[0];
+        let targetRole = await promiseRole(message.guild!, String(targetArg));
+
+        if (!targetRole) {
+          await send(message, {
+            embeds: [
+              Embeds.eyeGlass(
+                `${message.author}: I couldn't find **a role** by: \`${targetArg}\`. Try using its **ID** instead.`,
+              ),
+            ],
+          });
+          return;
+        }
+
+        const boolArg = args[1];
+        let hoist = false;
+
+        if (!boolArg) {
+          hoist = !targetRole.hoist;
+        } else if (boolArg?.toLowerCase() === "true") {
+          hoist = true;
+        } else if (boolArg?.toLowerCase() === "false") {
+          hoist = false;
+        }
+
+        const isSafe = await checkRoleHierarchy(message, targetRole, "hoist");
+        if (!isSafe) return;
+
+        if (targetRole.hoist === hoist) {
+          await send(message, {
+            embeds: [
+              Embeds.warning(
+                `${message.author}: ${targetRole}'s **hoist is already** set to: \`${hoist}\`.`,
+              ),
+            ],
+          });
+          return;
+        }
+
+        try {
+          targetRole.edit({
+            hoist: hoist,
+            reason: `Edited by ${message.author.username} (ID: ${message.author.id})`,
+          });
+          await send(message, {
+            embeds: [
+              Embeds.approve(
+                `${message.author}: Successfully **set** ${targetRole}'s **hoist** to: \`${hoist}\`.`,
+              ),
+            ],
+          });
+        } catch (error) {
+          await send(message, {
+            embeds: [Embeds.deny(`${message.author}: ${error}.`)],
+          });
+        }
+      },
+    },
+    {
+      name: "all",
+      description: "Manage roles for every single member in the server.",
+
+      guild_only: true,
+      requiredUserPermissions: [PermissionFlagsBits.Administrator],
+      requiredClientPermissions: [PermissionFlagsBits.ManageRoles],
+
+      syntax: "[add|remove|toggle] (roles)",
+      example: "remove @Winner @Premium",
+
+      cooldown: {
+        limit: 1,
+        duration: 300,
+        type: "guild",
+      },
+
+      execute: async (client: evClient, message: Message, args: string[]) => {
+        if (args.length === 0) {
+          await send(message, {
+            embeds: [
+              await Embeds.commandExample(message, client, command, "role all"),
+            ],
+          });
+          return;
+        }
+
+        let action = "toggle";
+        if (["add", "remove", "toggle"].includes(args[0]!.toLowerCase())) {
+          action = args[0]!.toLowerCase();
+          args = args.slice(1);
+        }
+
+        if (args.length === 0) {
+          await send(message, {
+            embeds: [
+              await Embeds.commandExample(message, client, command, "role all"),
+            ],
+          });
+          return;
+        }
+
+        const targetRoles: Role[] = [];
+
+        for (const arg of args) {
+          const roleAttempt = await promiseRole(message.guild!, arg, true);
+          if (
+            roleAttempt &&
+            !targetRoles.some((r) => r.id === roleAttempt.id)
+          ) {
+            targetRoles.push(roleAttempt);
+          }
+        }
+
+        if (targetRoles.length === 0) {
+          await send(message, {
+            embeds: [
+              await Embeds.commandExample(message, client, command, "role all"),
+            ],
+          });
+          return;
+        }
+
+        const isOwner = message.author.id === message.guild!.ownerId;
+        const execPosition = isOwner
+          ? Infinity
+          : message.member!.roles.highest.position;
+        const botPosition = message.guild!.members.me!.roles.highest.position;
+
+        const validRoles: Role[] = [];
+        const toSkip: Role[] = [];
+
+        for (const role of targetRoles) {
+          if (role.position >= execPosition || role.position >= botPosition) {
+            toSkip.push(role);
+          } else {
+            validRoles.push(role);
+          }
+        }
+
+        if (validRoles.length === 0) {
+          await send(message, {
+            embeds: [
+              Embeds.warning(
+                `${message.author}: You or I **couldn't manage** any of those **roles**.`,
+              ),
+            ],
+          });
+          return;
+        }
+
+        const allMembers = await message.guild!.members.fetch();
+        const targets = allMembers.filter((member) => {
+          for (const role of validRoles) {
+            const hasRole = member.roles.cache.has(role.id);
+            if (action === "add" && !hasRole) return true;
+            if (action === "remove" && hasRole) return true;
+            if (action === "toggle") return true;
+          }
+          return false;
+        });
+
+        if (targets.size === 0) {
+          await send(message, {
+            embeds: [
+              Embeds.eyeGlass(
+                `${message.author}: **No members** needed their roles updated!`,
+              ),
+            ],
+          });
+          return;
+        }
+
+        const roleMentions = validRoles.map((r) => r.toString()).join(", ");
+        const actionPresent =
+          action === "add"
+            ? "Adding"
+            : action === "remove"
+              ? "Removing"
+              : "Toggling";
+        const actionPast =
+          action === "add"
+            ? "Added"
+            : action === "remove"
+              ? "Removed"
+              : "Toggled";
+
+        const estimatedMs = targets.size * 1200;
+        const finishTimestamp =
+          Math.floor(Date.now() / 1000) + Math.ceil(estimatedMs / 1000) + 3;
+
+        const initialEmbed = Embeds.approve(
+          `${message.author}: ${actionPresent} ${roleMentions} for **${targets.size} members**. This will finish <t:${finishTimestamp}:R>.`,
+        );
+
+        const task = await sendCancellableTask(
+          message,
+          initialEmbed,
+          estimatedMs + 300000,
+          "mass role assignment",
+        );
+
+        const retryQueue: GuildMember[] = [];
+        let successCount = 0;
+
+        const processMember = async (member: GuildMember): Promise<boolean> => {
+          const toAdd: Role[] = [];
+          const toRemove: Role[] = [];
+
+          for (const role of validRoles) {
+            const hasRole = member.roles.cache.has(role.id);
+
+            if (action === "add" && !hasRole) {
+              toAdd.push(role);
+            } else if (action === "remove" && hasRole) {
+              toRemove.push(role);
+            } else if (action === "toggle") {
+              if (hasRole) toRemove.push(role);
+              else toAdd.push(role);
+            }
+          }
+
+          if (toAdd.length === 0 && toRemove.length === 0) return true;
+
+          try {
+            if (toAdd.length > 0) await member.roles.add(toAdd);
+            if (toRemove.length > 0) await member.roles.remove(toRemove);
+            return true;
+          } catch (error) {
+            return false;
+          }
+        };
+
+        for (const member of targets.values()) {
+          if (task.isCancelled()) break;
+
+          const success = await processMember(member);
+          if (success) {
+            successCount++;
+          } else {
+            retryQueue.push(member);
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
+
+        let finalFails = 0;
+        if (retryQueue.length > 0 && !task.isCancelled()) {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          for (const member of retryQueue) {
+            if (task.isCancelled()) break;
+
+            const success = await processMember(member);
+            if (success) {
+              successCount++;
+            } else {
+              finalFails++;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+          }
+        }
+
+        task.stop();
+
+        const responseEmbeds = [];
+
+        if (task.isCancelled()) {
+          responseEmbeds.push(
+            Embeds.warning(
+              `${message.author}: mass-role **cancelled**. ${actionPast} ${roleMentions} for **${successCount} / ${targets.size} members**.`,
+            ),
+          );
+        } else {
+          responseEmbeds.push(
+            Embeds.approve(
+              `${message.author}: Finished. **${actionPast}** ${roleMentions} for **${successCount} members**.`,
+            ),
+          );
+        }
+
+        if (finalFails > 0) {
+          responseEmbeds.push(
+            Embeds.warning(
+              `Failed to update **${finalFails} members** due to strict API limits.`,
+            ),
+          );
+        }
+
+        if (toSkip.length > 0) {
+          responseEmbeds.push(
+            Embeds.warning(
+              `Skipped roles due to hierarchy: \`${toSkip.map((r) => r.name).join(", ")}\``,
+            ),
+          );
+        }
+
+        await task.statusMessage.edit({
+          embeds: responseEmbeds,
+          components: [],
+        });
+      },
+    },
   ],
 
   execute: async (client: evClient, message: Message, args: string[]) => {
@@ -317,41 +657,33 @@ const command: Command = {
       return;
     }
 
-    let targetArg = args[0];
-    let targetMember = await promiseMember(message.guild!, String(targetArg));
+    const targetMembers: GuildMember[] = [];
+    const targetRoles: Role[] = [];
 
-    if (!targetMember) {
-      await send(message, {
-        embeds: [
-          Embeds.eyeGlass(
-            `${message.author}: I couldn't find **a member** by: \`${targetArg}\`. Try using their **ID** instead.`,
-          ),
-        ],
-      });
-      return;
-    }
+    for (const arg of args) {
+      const memberAttempt = await promiseMember(message.guild!, arg);
+      if (memberAttempt) {
+        if (!targetMembers.some((m) => m.id === memberAttempt.id)) {
+          targetMembers.push(memberAttempt);
+        }
+        continue;
+      }
 
-    let roleArgs = args.slice(1);
-    const roles = [];
-
-    for (const arg of roleArgs) {
-      const attempt = await promiseRole(message.guild!, arg, true);
-      if (attempt) {
-        roles.push(attempt);
+      const roleAttempt = await promiseRole(message.guild!, arg, true);
+      if (roleAttempt) {
+        if (!targetRoles.some((r) => r.id === roleAttempt.id)) {
+          targetRoles.push(roleAttempt);
+        }
         continue;
       }
     }
 
-    if (roles.length === 0) {
+    if (targetMembers.length === 0 || targetRoles.length === 0) {
       await send(message, {
         embeds: [await Embeds.commandExample(message, client, command)],
       });
       return;
     }
-
-    const toAdd: Role[] = [];
-    const toRemove: Role[] = [];
-    const toSkip: Role[] = [];
 
     const isOwner = message.author.id === message.guild!.ownerId;
     const execPosition = isOwner
@@ -359,62 +691,105 @@ const command: Command = {
       : message.member!.roles.highest.position;
     const botPosition = message.guild!.members.me!.roles.highest.position;
 
-    for (const role of roles) {
+    const toSkip: Role[] = [];
+    const validRoles: Role[] = [];
+
+    for (const role of targetRoles) {
       if (role.position >= execPosition || role.position >= botPosition) {
         toSkip.push(role);
-        continue;
-      }
-
-      if (targetMember.roles.cache.has(role.id)) {
-        toRemove.push(role);
-        continue;
       } else {
-        toAdd.push(role);
-        continue;
+        validRoles.push(role);
       }
     }
 
     try {
-      if (toAdd.length > 0) await targetMember.roles.add(toAdd);
-      if (toRemove.length > 0) await targetMember.roles.remove(toRemove);
+      const memberResults: {
+        member: GuildMember;
+        added: Role[];
+        removed: Role[];
+      }[] = [];
+
+      if (validRoles.length > 0) {
+        for (const member of targetMembers) {
+          const toAdd: Role[] = [];
+          const toRemove: Role[] = [];
+
+          for (const role of validRoles) {
+            if (member.roles.cache.has(role.id)) {
+              toRemove.push(role);
+            } else {
+              toAdd.push(role);
+            }
+          }
+
+          memberResults.push({ member, added: toAdd, removed: toRemove });
+
+          if (toAdd.length > 0)
+            await member.roles.add(
+              toAdd,
+              `${message.author.username} (ID: ${message.author.id})`,
+            );
+          if (toRemove.length > 0)
+            await member.roles.remove(
+              toRemove,
+              `${message.author.username} (ID: ${message.author.id})`,
+            );
+        }
+      }
 
       const responseEmbeds = [];
 
-      if (toAdd.length > 0 || toRemove.length > 0) {
-        let emoji = Emojis.add;
-        const summary = [];
+      if (validRoles.length > 0) {
+        const MAX_DETAILED_EMBEDS = 8;
+        const displayResults = memberResults.slice(0, MAX_DETAILED_EMBEDS);
+        const remainingCount = memberResults.length - MAX_DETAILED_EMBEDS;
 
-        if (toAdd.length > 0) {
-          summary.push(
-            `**Added**: ${toAdd.map((r) => r.toString()).join(", ")}`,
+        for (const result of displayResults) {
+          let emoji = Emojis.add;
+          const summary = [];
+
+          if (result.added.length > 0) {
+            summary.push(
+              `**Added**: ${result.added.map((r) => r.toString()).join(", ")}`,
+            );
+          }
+          if (result.removed.length > 0) {
+            summary.push(
+              `**Removed**: ${result.removed.map((r) => r.toString()).join(", ")}`,
+            );
+          }
+
+          let final = "";
+          const lastEntry = summary[summary.length - 1];
+
+          if (lastEntry?.startsWith("**Removed**")) {
+            final = `from ${result.member}`;
+          } else {
+            final = `to ${result.member}`;
+          }
+
+          if (summary[0]?.startsWith("**Removed**")) {
+            emoji = Emojis.minus;
+          }
+
+          responseEmbeds.push(
+            Embeds.custom(
+              emoji,
+              `${message.author}: ${summary.join(" - ")} ${final}.`,
+              Colours.mathBlue,
+            ),
           );
         }
-        if (toRemove.length > 0) {
-          summary.push(
-            `**Added**: ${toRemove.map((r) => r.toString()).join(", ")}`,
+
+        if (remainingCount > 0) {
+          responseEmbeds.push(
+            Embeds.custom(
+              Emojis.add,
+              `${message.author}: And managed roles for **${remainingCount} more member${remainingCount > 1 ? "s" : ""}**.`,
+              Colours.mathBlue,
+            ),
           );
         }
-
-        let final = "";
-        const lastEntry = summary[summary.length - 1];
-
-        if (lastEntry?.startsWith("**Removed**")) {
-          final = `from ${targetMember}`;
-        } else {
-          final = `to ${targetMember}`;
-        }
-
-        if (summary[0]?.startsWith("**Removed**")) {
-          emoji = Emojis.minus;
-        }
-
-        responseEmbeds.push(
-          Embeds.custom(
-            emoji,
-            `${message.author}: ${summary.join(" - ")} ${final}.`,
-            Colours.mathBlue,
-          ),
-        );
       }
 
       if (toSkip.length > 0) {
