@@ -512,12 +512,18 @@ const command: Command = {
           await send(message, {
             embeds: [
               Embeds.eyeGlass(
-                `${message.author}: **No members** needed their roles updated!`,
+                `${message.author}: **No members** need their roles updated.`,
               ),
             ],
           });
           return;
         }
+
+        const confirmed = await sendConfirmationView(
+          message,
+          `${message.author}: Are you sure you want to **role everyone**? This will **add/remove the specified role(s) to every single member**.`,
+        );
+        if (!confirmed) return;
 
         const roleMentions = validRoles.map((r) => r.toString()).join(", ");
         const actionPresent =
@@ -525,7 +531,7 @@ const command: Command = {
             ? "Adding"
             : action === "remove"
               ? "Removing"
-              : "Toggling";
+              : "Toggling";1
         const actionPast =
           action === "add"
             ? "Added"
