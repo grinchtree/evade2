@@ -431,3 +431,52 @@ export async function sendConfirmationView(
 
   return confirmed;
 }
+
+export async function sendCancellableTask(
+  message: Message,
+  initialEmbed: EmbedBuilder,
+  timeLimitMs: number,
+  topic: string = "operation",
+) {
+  // setup the cancel button
+  const cancelButton = new ButtonBuilder()
+    .setCustomId("cancel_task")
+    .setLabel("Cancel")
+    .setStyle(ButtonStyle.Danger);
+
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(cancelButton);
+
+  // send the status message with the button attached
+  const statusMessage = await send(message, {
+    embeds: [initialEmbed],
+    components: [row],
+  });
+
+  let cancelled = false;
+
+  // listen specifically for the command author clicking cancel
+  const collector = statusMessage.createMessageComponentCollector({
+    componentType: ComponentType.Button,
+    filter: (i) =>
+      i.user.id === message.author.id && i.customId === "cancel_task",
+    time: timeLimitMs,
+  });
+
+  collector.on("collect", async (i) => {
+    cancelled = true;
+    collector.stop();
+
+    // instantly update the embed to show it's stopping
+    await i.update({
+      components: [],
+      embeds: [Embeds.warning(`${message.author}: **Cancelling** ${topic}...`)],
+    });
+  });
+
+  // return the control methods so the command can check the status
+  return {
+    statusMessage,
+    isCancelled: () => cancelled,
+    stop: () => collector.stop(),
+  };
+}
