@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@supabase/server": "^1.4.1",
+    "canvas": "^3.2.3",
     "chalk": "^6.0.0",
     "discord.js": "^14.27.0"
   }
