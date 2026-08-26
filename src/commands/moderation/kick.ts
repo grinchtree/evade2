@@ -69,7 +69,7 @@ const command: Command = {
 
     try {
       await targetMember.kick(
-        `${message.author.username} (ID: ${message.author.id}) / ${reason}`,
+        `Kicked by ${message.author.username} (ID: ${message.author.id}) / ${reason}`,
       );
       await send(message, {
         embeds: [

@@ -105,7 +105,7 @@ const command: Command = {
 
       await message.guild!.members.ban(targetUser.id, {
         deleteMessageSeconds,
-        reason: `${message.author.username} (ID: ${message.author.id}) / ${reason}`,
+        reason: `Banned by ${message.author.username} (ID: ${message.author.id}) / ${reason}`,
       });
 
       await send(message, {

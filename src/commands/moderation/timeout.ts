@@ -84,7 +84,7 @@ const command: Command = {
     try {
       await targetMember.timeout(
         timeoutSeconds * 1000,
-        `${message.author.username} (ID: ${message.author.id} / ${reason})`,
+        `Timedout by ${message.author.username} (ID: ${message.author.id} / ${reason})`,
       );
 
       await send(message, {

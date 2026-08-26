@@ -79,7 +79,7 @@ const command: Command = {
 
       await message.guild!.members.unban(
         targetUser.id,
-        `${message.author.username} (ID: ${message.author.id}) / ${reason}`,
+        `Unbanned by ${message.author.username} (ID: ${message.author.id}) / ${reason}`,
       );
 
       await send(message, {

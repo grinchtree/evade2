@@ -62,7 +62,7 @@ const command: Command = {
 
       await targetMember.timeout(
         null,
-        `${message.author.username} (ID: ${message.author.id}) / ${reason}`,
+        `Untimedout by ${message.author.username} (ID: ${message.author.id}) / ${reason}`,
       );
       await send(message, {
         embeds: [
