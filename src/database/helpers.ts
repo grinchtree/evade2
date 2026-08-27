@@ -578,8 +578,7 @@ export async function getAutoroleData(
       await getGuildData(guild_id, true);
       const newAutoroles: AutoroleData = {
         guild_id,
-        human_roles: [],
-        bot_roles: [],
+        roles: [],
       };
 
       await supabase.from("autoroles").insert(newAutoroles);

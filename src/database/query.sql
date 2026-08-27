@@ -81,8 +81,7 @@ CREATE TABLE IF NOT EXISTS disabled_commands (
 
 CREATE TABLE IF NOT EXISTS autoroles (
   guild_id TEXT PRIMARY KEY REFERENCES guilds(id) ON DELETE CASCADE,
-  human_roles TEXT[] DEFAULT '{}',
-  bot_roles TEXT[] DEFAULT '{}',
+  roles TEXT[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
