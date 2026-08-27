@@ -76,7 +76,7 @@ const event: Event = {
         await send(message, {
           embeds: [
             Embeds.warning(
-              `${message.author}: I'm **missing** permissions: \`${formatted}\`.`,
+              `${message.author}: You're **missing** the permissions: \`${formatted}\`.`,
             ),
           ],
         });
@@ -95,7 +95,7 @@ const event: Event = {
         await send(message, {
           embeds: [
             Embeds.warning(
-              `${message.author}: I'm **missing** permissions: \`${formatted}\`.`,
+              `${message.author}: I'm **missing** the permissions: \`${formatted}\`.`,
             ),
           ],
         });
