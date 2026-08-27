@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS members (
   sticky_roles TEXT[] DEFAULT '{}',
   preferences JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()), -- added so you can track profile updates
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   PRIMARY KEY (user_id, guild_id)
 );
 
@@ -74,7 +74,15 @@ CREATE TABLE IF NOT EXISTS antinuke (
 
 CREATE TABLE IF NOT EXISTS disabled_commands (
   guild_id TEXT PRIMARY KEY REFERENCES guilds(id) ON DELETE CASCADE,
-  command_names TEXT[] DEFAULT '[]',
+  command_names TEXT[] DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS autoroles (
+  guild_id TEXT PRIMARY KEY REFERENCES guilds(id) ON DELETE CASCADE,
+  human_roles TEXT[] DEFAULT '{}',
+  bot_roles TEXT[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
@@ -85,3 +93,4 @@ CREATE INDEX IF NOT EXISTS idx_tempbans_expires_at ON tempbans(expires_at);
 CREATE INDEX IF NOT EXISTS idx_warnings_guild_user ON warnings(guild_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_cases_guild ON cases(guild_id);
 CREATE INDEX IF NOT EXISTS idx_disabled_commands ON disabled_commands(guild_id);
+CREATE INDEX IF NOT EXISTS idx_autoroles on autoroles(guild_id)
