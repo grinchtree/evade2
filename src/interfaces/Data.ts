@@ -85,3 +85,12 @@ export interface DisabledCommandData {
   created_at?: string;
   updated_at?: string;
 }
+
+// guilds autoroles
+export interface AutoroleData {
+  guild_id: string;
+  human_roles: string[];
+  bot_roles: string[];
+  created_at?: string;
+  updated_at?: String;
+}

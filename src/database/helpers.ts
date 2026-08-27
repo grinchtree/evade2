@@ -1,17 +1,19 @@
 import { supabase } from "./database";
 import { DatabaseCache } from "./cache";
 import { logging } from "../utils/logging";
-import type {
-  UserData,
-  GuildData,
-  MemberData,
-  CaseData,
-  HardbanData,
-  AntinukeData,
-  PrefixData,
-  WarningData,
-  DisabledCommandData,
+import {
+  type UserData,
+  type GuildData,
+  type MemberData,
+  type CaseData,
+  type HardbanData,
+  type AntinukeData,
+  type PrefixData,
+  type WarningData,
+  type DisabledCommandData,
+  type AutoroleData,
 } from "../interfaces/Data";
+import type { GatewayAutoModerationRuleUpdateDispatch } from "discord.js";
 
 // data caches (allowing nulls so we don't spam the db for things we already know don't exist)
 const guildsCache = new DatabaseCache<GuildData | null>(1000, 600000);
@@ -32,6 +34,8 @@ const disabledCommandsCache = new DatabaseCache<DisabledCommandData | null>(
   1000,
   300000,
 );
+
+const autoroleCache = new DatabaseCache<AutoroleData | null>(1000, 300000);
 
 // --- GUILD DATA ---
 
@@ -238,7 +242,7 @@ export async function dumpMemberData(
 export async function getMemberWarning(
   user_id: string,
   guild_id: string,
-): Promise<WarningData[]> {
+): Promise<WarningData[] | []> {
   const cacheKey = `${user_id}-${guild_id}`;
 
   return warningsCache.getOrFetch(cacheKey, async () => {
@@ -553,4 +557,57 @@ export async function deleteDisabledCommandData(
 // manually flush a guild's disabled commands from local memory
 export async function dumpDisabledCommandData(guild_id: string): Promise<void> {
   disabledCommandsCache.delete(guild_id);
+}
+
+// --- AUTOROLE DATA ---
+
+export async function getAutoroleData(
+  guild_id: string,
+  autoCreate: boolean = true,
+): Promise<AutoroleData | null> {
+  return autoroleCache.getOrFetch(guild_id, async () => {
+    const { data } = await supabase
+      .from("autoroles")
+      .select("*")
+      .eq("guild_id", guild_id)
+      .single();
+
+    if (data) return data;
+
+    if (autoCreate) {
+      await getGuildData(guild_id, true);
+      const newAutoroles: AutoroleData = {
+        guild_id,
+        human_roles: [],
+        bot_roles: [],
+      };
+
+      await supabase.from("autoroles").insert(newAutoroles);
+      return newAutoroles;
+    }
+
+    return null;
+  });
+}
+
+// fetch autorole configuration for a guild
+export async function updateAutoroleData(
+  guild_id: string,
+  data: Partial<AutoroleData>,
+): Promise<void> {
+  await supabase.from("autoroles").update(data).eq("guild_id", guild_id);
+
+  const current = await getAutoroleData(guild_id, false);
+  if (current) autoroleCache.set(guild_id, { ...current, ...data });
+}
+
+// delete a guild's autorole settings
+export async function deleteAutoroleData(guild_id: string): Promise<void> {
+  await supabase.from("autoroles").delete().eq("guild_id", guild_id);
+  autoroleCache.delete(guild_id);
+}
+
+// manually flush a guildautorole data from local memory
+export async function dumpAutoroleData(guild_id: string): Promise<void> {
+  autoroleCache.delete(guild_id);
 }
