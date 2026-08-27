@@ -566,13 +566,21 @@ export async function getAutoroleData(
   autoCreate: boolean = true,
 ): Promise<AutoroleData | null> {
   return autoroleCache.getOrFetch(guild_id, async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("autoroles")
       .select("*")
       .eq("guild_id", guild_id)
       .single();
 
-    if (data) return data;
+    if (error && error.code !== "PGRST116") {
+      return;
+    }
+
+    if (data) {
+      // ensure roles is always an array even if db returns null
+      data.roles = data.roles || [];
+      return data;
+    }
 
     if (autoCreate) {
       await getGuildData(guild_id, true);
@@ -581,7 +589,11 @@ export async function getAutoroleData(
         roles: [],
       };
 
-      await supabase.from("autoroles").insert(newAutoroles);
+      const { error: insertError } = await supabase
+        .from("autoroles")
+        .insert(newAutoroles);
+      if (insertError) logging.error(String(insertError));
+
       return newAutoroles;
     }
 
@@ -589,24 +601,28 @@ export async function getAutoroleData(
   });
 }
 
-// fetch autorole configuration for a guild
 export async function updateAutoroleData(
   guild_id: string,
   data: Partial<AutoroleData>,
 ): Promise<void> {
-  await supabase.from("autoroles").update(data).eq("guild_id", guild_id);
+  const { error } = await supabase
+    .from("autoroles")
+    .update(data)
+    .eq("guild_id", guild_id);
+
+  if (error) {
+    return;
+  }
 
   const current = await getAutoroleData(guild_id, false);
   if (current) autoroleCache.set(guild_id, { ...current, ...data });
 }
 
-// delete a guild's autorole settings
 export async function deleteAutoroleData(guild_id: string): Promise<void> {
   await supabase.from("autoroles").delete().eq("guild_id", guild_id);
   autoroleCache.delete(guild_id);
 }
 
-// manually flush a guildautorole data from local memory
 export async function dumpAutoroleData(guild_id: string): Promise<void> {
   autoroleCache.delete(guild_id);
 }
