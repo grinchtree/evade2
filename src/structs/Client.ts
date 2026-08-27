@@ -3,6 +3,8 @@ import type { Command } from "../interfaces/Command";
 import { logging } from "../utils/logging";
 import { loadCommands } from "../loaders/commandLoader";
 import { loadEvents } from "../loaders/eventLoader";
+import type { SnipeData } from "../interfaces/SnipeData";
+import { DatabaseCache } from "../database/cache";
 
 export class evClient extends Client {
   // store commands, aliases, and cooldown limits in memory
@@ -12,6 +14,8 @@ export class evClient extends Client {
     string,
     Collection<string, { count: number; expiredAt: number }>
   > = new Collection();
+
+  public messageSnipes = new DatabaseCache<SnipeData[]>(5000, 7200000);
 
   // client settings
   public commandCaseSensitive: boolean = false;
@@ -68,5 +72,12 @@ export class evClient extends Client {
       logging.error(error);
       process.exit();
     });
+
+    setInterval(
+      () => {
+        this.messageSnipes.clear();
+      },
+      60 * 60 * 2 * 1000,
+    );
   }
 }
