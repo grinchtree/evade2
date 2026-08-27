@@ -61,7 +61,7 @@ const command: Command = {
           await send(message, {
             embeds: [
               Embeds.eyeGlass(
-                `${message.author}: There **aren't any roles** in this server.`,
+                `${message.author}: There **aren't any roles** in the server.`,
               ),
             ],
           });
@@ -79,8 +79,9 @@ const command: Command = {
           title: `Server Roles`,
           formatItem: (role, index) => {
             const paddedIndex = String(index + 1).padStart(2, "0");
-            return `\`${paddedIndex}\` ${role.toString()}`;
+            return `\`${paddedIndex}\` ${role}`;
           },
+          timeout: 30000,
         });
 
         await paginator.start(message);
@@ -531,7 +532,8 @@ const command: Command = {
             ? "Adding"
             : action === "remove"
               ? "Removing"
-              : "Toggling";1
+              : "Toggling";
+
         const actionPast =
           action === "add"
             ? "Added"
