@@ -10,13 +10,21 @@ import { checkRoleHierarchy } from "../../utils/permissions";
 const command: Command = {
   name: "autorole",
   description: "Manage the server's automatically assigning roles.",
+
   aliases: ["aur", "autoroles"],
+
   guild_only: true,
   requiredUserPermissions: [PermissionFlagsBits.ManageGuild],
   requiredClientPermissions: [PermissionFlagsBits.ManageGuild],
+
   syntax: "(subcommand) (arguments)",
   example: "add @September",
-  cooldown: { limit: 2, duration: 5, type: "member" },
+
+  cooldown: {
+    limit: 2,
+    duration: 5,
+    type: "member",
+  },
 
   subCommands: [
     {
