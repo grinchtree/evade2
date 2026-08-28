@@ -12,7 +12,7 @@ import { getPrefixData } from "../database/helpers";
 
 // standard hex colours used across the bot
 export class Colours {
-  static readonly theme: ColorResolvable = "#5c7e8b";
+  static readonly theme: ColorResolvable = "#c3a1ed";
 
   static readonly default: ColorResolvable = "#8899a6";
   static readonly discordDefault: ColorResolvable = "#99aab5";
