@@ -20,12 +20,13 @@ async function bootstrap() {
 
   client.once(Events.ClientReady, (readyClient) => {
     logging.info(`Connected to Discord.`);
-    readyClient.user?.setPresence({
+    readyClient.user.setPresence({
       status: "online",
       activities: [
         {
-          name: "🔗 evade2",
-          type: ActivityType.Custom,
+          name: "🔗 evade.bot",
+          type: ActivityType.Streaming,
+          url: "https://www.twitch.tv/evadebotbleh",
         },
       ],
     });
