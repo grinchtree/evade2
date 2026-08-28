@@ -55,23 +55,19 @@ const command: Command = {
     const query = args.join(" ").trim();
     const cacheKey = query.toLowerCase();
 
-    const googleBtn = new ButtonBuilder()
-      .setLabel("Search Google")
-      .setStyle(ButtonStyle.Link)
-      .setURL(
-        `https://www.google.com/search?q=${encodeURIComponent(query + " lyrics")}`,
-      );
-
-    const youtubeBtn = new ButtonBuilder()
-      .setLabel("Search YouTube")
-      .setStyle(ButtonStyle.Link)
-      .setURL(
-        `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
-      );
-
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      googleBtn,
-      youtubeBtn,
+      new ButtonBuilder()
+        .setLabel("Search Google")
+        .setStyle(ButtonStyle.Link)
+        .setURL(
+          `https://www.google.com/search?q=${encodeURIComponent(query + " lyrics")}`,
+        ),
+      new ButtonBuilder()
+        .setLabel("Search YouTube")
+        .setStyle(ButtonStyle.Link)
+        .setURL(
+          `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+        ),
     );
 
     const statusMessage = await send(message, {
@@ -82,7 +78,24 @@ const command: Command = {
     });
 
     setTimeout(() => {
-      statusMessage.edit({ components: [] }).catch(() => null);
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setLabel("Search Google")
+          .setStyle(ButtonStyle.Link)
+          .setURL(
+            `https://www.google.com/search?q=${encodeURIComponent(query + " lyrics")}`,
+          )
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setLabel("Search YouTube")
+          .setStyle(ButtonStyle.Link)
+          .setURL(
+            `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+          )
+          .setDisabled(true),
+      );
+
+      statusMessage.edit({ components: [row] }).catch(() => null);
     }, 30000);
 
     try {
