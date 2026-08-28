@@ -125,7 +125,7 @@ const command: Command = {
     const msg = await send(message, {
       embeds: [
         Embeds.fetch(
-          `${message.author}: Loading **Roblox Profile** for **[\`${targetUsername}\`](https://www.roblox.com/${targetUsername})**.`,
+          `${message.author}: Loading **Roblox Profile** for **[\`${targetUsername}\`](https://www.roblox.com/${targetUsername})**...`,
         ),
       ],
     });
@@ -136,10 +136,8 @@ const command: Command = {
       if (!profile) {
         await msg.edit({
           embeds: [
-            Embeds.custom(
-              ":mag:",
+            Embeds.eyeGlass(
               `${message.author}: I couldn't find a Roblox user named **${targetUsername}**.`,
-              Colours.default,
             ),
           ],
         });
