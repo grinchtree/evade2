@@ -217,7 +217,7 @@ const command: Command = {
         if (!roles.length) {
           await send(message, {
             embeds: [
-              Embeds.eyeGlass(
+              Embeds.warning(
                 `${message.author}: There **aren't any autoroles** in the server.`,
               ),
             ],
