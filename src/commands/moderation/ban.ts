@@ -1,13 +1,13 @@
 import {
+  GuildBan,
   GuildMember,
-  InviteTargetUsersJobStatus,
   PermissionFlagsBits,
-  User,
+  type User,
   type Message,
 } from "discord.js";
 import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
-import { Embeds, send } from "../../utils/messaging";
+import { Colours, Embeds, send } from "../../utils/messaging";
 import {
   promiseBanEntry,
   promiseMember,
@@ -15,7 +15,7 @@ import {
 } from "../../utils/promise";
 import { checkHierarchy } from "../../utils/permissions";
 import { clampNumber, stringToSeconds } from "../../utils/formatters";
-import { sendConfirmationView } from "../../utils/components";
+import { Paginator, sendConfirmationView } from "../../utils/components";
 
 const command: Command = {
   name: "ban",
@@ -33,6 +33,60 @@ const command: Command = {
     duration: 5,
     type: "member",
   },
+
+  subCommands: [
+    {
+      name: "list",
+      description: "List all of the bans in the server.",
+
+      guild_only: true,
+      requiredUserPermissions: [PermissionFlagsBits.ViewAuditLog],
+      requiredClientPermissions: [
+        PermissionFlagsBits.ViewAuditLog,
+        PermissionFlagsBits.BanMembers,
+      ],
+
+      cooldown: {
+        limit: 1,
+        duration: 30,
+        type: "member",
+      },
+
+      execute: async (client: evClient, message: Message, args: string[]) => {
+        const fetchedBans = await message.guild!.bans.fetch();
+        const bans = Array.from(fetchedBans.values());
+
+        if (bans.length === 0) {
+          await send(message, {
+            embeds: [
+              Embeds.eyeGlass(
+                `${message.author}: There **aren't any banned members** in the server.`,
+              ),
+            ],
+          });
+          return;
+        }
+
+        const paginator = new Paginator<GuildBan>({
+          items: bans,
+          colour: Colours.theme,
+          userId: message.author.id,
+          author: {
+            name: message.author.username,
+            iconURL: message.author.displayAvatarURL({ size: 1024 }),
+          },
+          title: `Server Bans`,
+          formatItem: (ban, index) => {
+            const paddedIndex = String(index + 1).padStart(2, "0");
+            return `\`${paddedIndex}\` ${ban.user}`;
+          },
+          timeout: 30000,
+        });
+
+        await paginator.start(message);
+      },
+    },
+  ],
 
   execute: async (client: evClient, message: Message, args: string[]) => {
     if (args.length === 0) {
