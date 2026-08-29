@@ -129,7 +129,7 @@ const command: Command = {
       requiredClientPermissions: [PermissionFlagsBits.ManageRoles],
 
       syntax: "(member)",
-      example: "@Notch",
+      example: "evade",
 
       cooldown: {
         limit: 1,
