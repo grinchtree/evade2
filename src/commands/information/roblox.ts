@@ -201,12 +201,35 @@ const command: Command = {
           .setLabel("View Profile")
           .setStyle(ButtonStyle.Link)
           .setURL(profileUrl),
+        new ButtonBuilder()
+          .setLabel("View Rolimons")
+          .setStyle(ButtonStyle.Link)
+          .setURL(`https://www.rolimons.com/player/${profile.userId}`),
       );
 
       await msg.edit({
         embeds: [embed],
         components: [row],
       });
+
+      setInterval(async () => {
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setLabel("View Profile")
+            .setStyle(ButtonStyle.Link)
+            .setURL(profileUrl)
+            .setDisabled(true),
+          new ButtonBuilder()
+            .setLabel("View Rolimons")
+            .setStyle(ButtonStyle.Link)
+            .setURL(`https://www.rolimons.com/player/${profile.userId}`)
+            .setDisabled(true),
+        );
+
+        await msg.edit({
+          components: [row],
+        });
+      }, 30000);
     } catch (error) {
       console.error("[Command: Roblox] Error:", error);
       await msg.edit({
