@@ -15,12 +15,11 @@ import {
 } from "../interfaces/Data";
 import type { GatewayAutoModerationRuleUpdateDispatch } from "discord.js";
 
-// data caches (allowing nulls so we don't spam the db for things we already know don't exist)
+// cache
 const guildsCache = new DatabaseCache<GuildData | null>(1000, 600000);
 const usersCache = new DatabaseCache<UserData | null>(2000, 600000);
 const membersCache = new DatabaseCache<MemberData | null>(5000, 300000);
 
-// unified cases cache: handles both single CaseData objects and arrays of CaseData[]
 const casesCache = new DatabaseCache<CaseData | CaseData[] | null>(
   1000,
   300000,
@@ -625,4 +624,59 @@ export async function deleteAutoroleData(guild_id: string): Promise<void> {
 
 export async function dumpAutoroleData(guild_id: string): Promise<void> {
   autoroleCache.delete(guild_id);
+}
+
+// --- STICKY ROLE DATA ---
+
+export async function getMemberStickyRoles(
+  user_id: string,
+  guild_id: string,
+): Promise<string[]> {
+  const member = await getMemberData(user_id, guild_id, true);
+  return member?.sticky_roles || [];
+}
+
+export async function addMemberStickyRoles(
+  user_id: string,
+  guild_id: string,
+  role_ids: string[],
+): Promise<void> {
+  if (role_ids.length === 0) return;
+
+  const currentRoles = await getMemberStickyRoles(user_id, guild_id);
+  const updatedRoles = Array.from(new Set([...currentRoles, ...role_ids]));
+
+  if (currentRoles.length !== updatedRoles.length) {
+    await updateMemberData(user_id, guild_id, { sticky_roles: updatedRoles });
+  }
+}
+
+export async function removeMemberStickyRoles(
+  user_id: string,
+  guild_id: string,
+  role_ids: string[],
+): Promise<void> {
+  if (role_ids.length === 0) return;
+
+  const currentRoles = await getMemberStickyRoles(user_id, guild_id);
+  const updatedRoles = currentRoles.filter((id) => !role_ids.includes(id));
+
+  if (currentRoles.length !== updatedRoles.length) {
+    await updateMemberData(user_id, guild_id, { sticky_roles: updatedRoles });
+  }
+}
+
+export async function setMemberStickyRoles(
+  user_id: string,
+  guild_id: string,
+  roles: string[],
+): Promise<void> {
+  await updateMemberData(user_id, guild_id, { sticky_roles: roles });
+}
+
+export async function clearMemberStickyRoles(
+  user_id: string,
+  guild_id: string,
+): Promise<void> {
+  await updateMemberData(user_id, guild_id, { sticky_roles: [] });
 }
