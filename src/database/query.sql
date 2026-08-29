@@ -92,4 +92,4 @@ CREATE INDEX IF NOT EXISTS idx_tempbans_expires_at ON tempbans(expires_at);
 CREATE INDEX IF NOT EXISTS idx_warnings_guild_user ON warnings(guild_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_cases_guild ON cases(guild_id);
 CREATE INDEX IF NOT EXISTS idx_disabled_commands ON disabled_commands(guild_id);
-CREATE INDEX IF NOT EXISTS idx_autoroles on autoroles(guild_id)
+CREATE INDEX IF NOT EXISTS idx_autoroles ON autoroles(guild_id)
