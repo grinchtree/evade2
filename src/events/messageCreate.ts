@@ -1,4 +1,4 @@
-import { Collection, Emoji, Events, Message } from "discord.js";
+import { Collection, Events, Message, PermissionFlagsBits } from "discord.js";
 import type { evClient } from "../structs/Client";
 import type { Event } from "../interfaces/Event";
 import { config } from "../../config";
@@ -84,14 +84,30 @@ const event: Event = {
       }
     }
 
-    // check if the bot has the permissions it needs to execute the command
-    if (currentCommand.requiredClientPermissions && message.guild?.members.me) {
-      const missingPerms = message.guild.members.me.permissions.missing(
-        currentCommand.requiredClientPermissions,
-      );
+    // check if the bot has the permissions it needs to execute the command (always requiring embed links)
+    if (message.guild?.members.me) {
+      const requiredClientPerms = currentCommand.requiredClientPermissions
+        ? [
+            ...currentCommand.requiredClientPermissions,
+            PermissionFlagsBits.EmbedLinks,
+          ]
+        : [PermissionFlagsBits.EmbedLinks];
+
+      const missingPerms =
+        message.guild.members.me.permissions.missing(requiredClientPerms);
 
       if (missingPerms.length > 0) {
         const formatted = formatPermissions(missingPerms);
+
+        // if we are missing embed links, we must fall back to plain text because our embed will fail to send
+        if (missingPerms.includes("EmbedLinks")) {
+          await send(
+            message,
+            `${message.author}: I'm **missing** the permissions: \`${formatted}\`.`,
+          ).catch(() => {}); // silently fail if we don't even have send messages perms
+          return;
+        }
+
         await send(message, {
           embeds: [
             Embeds.warning(
