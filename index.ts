@@ -3,8 +3,10 @@ import { evClient } from "./src/structs/Client";
 import { logging } from "./src/utils/logging";
 import { config } from "./config";
 import { verifyDatabaseConnection } from "./src/database/database";
+import { startConsoleDashboard } from "./src/utils/dashboard";
 
 async function bootstrap() {
+  startConsoleDashboard();
   logging.info("Starting...");
 
   const client = new evClient({
