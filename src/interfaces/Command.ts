@@ -14,6 +14,8 @@ export interface Command {
   guild_only?: boolean;
   requiredUserPermissions?: PermissionResolvable[];
   requiredClientPermissions?: PermissionResolvable[];
+  requiresUserPremium?: boolean;
+
   cooldown?: Cooldown;
 
   execute(

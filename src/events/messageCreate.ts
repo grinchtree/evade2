@@ -6,35 +6,60 @@ import type { Command } from "../interfaces/Command";
 import { formatPermissions } from "../utils/formatters";
 import { Colours, Embeds, Emojis, send } from "../utils/messaging";
 import { logging } from "../utils/logging";
-import { getDisabledCommandData, getPrefixData } from "../database/helpers";
+import {
+  getDisabledCommandData,
+  getPrefixData,
+  getUserData,
+} from "../database/helpers";
 
 const event: Event = {
   name: Events.MessageCreate,
   execute: async (message: Message, client: evClient) => {
-    const prefix = message.guild
+    // ignore other bots immediately to save unnecessary database queries
+    if (message.author.bot) return;
+
+    // fetch user data for personal prefix, and guild data for server prefix
+    const userData = await getUserData(message.author.id, false);
+    const personalPrefix = userData?.personal_prefix;
+
+    const serverPrefix = message.guild
       ? await getPrefixData(message.guild.id)
       : config.prefix;
 
-    // ignore other bots and messages that don't start with our prefix
-    if (message.author.bot || !message.content.startsWith(prefix)) return;
+    // determine which prefix was used (prioritizing the personal one)
+    let usedPrefix = "";
+    if (personalPrefix && message.content.startsWith(personalPrefix)) {
+      usedPrefix = personalPrefix;
+    } else if (message.content.startsWith(serverPrefix)) {
+      usedPrefix = serverPrefix;
+    } else {
+      return; // ignore messages that don't start with a valid prefix
+    }
 
-    // split the message into the command name and its arguments
-    const args = message.content.slice(config.prefix.length).trim().split(/ +/);
+    // split the message into the command name and its arguments based on the exact prefix used
+    const args = message.content.slice(usedPrefix.length).trim().split(/ +/);
     let commandName = args.shift()?.toLowerCase();
-    if (client.commandCaseSensitive === true) {
-      commandName = args.shift();
+
+    if (client.commandCaseSensitive === true && commandName) {
+      // Re-grab the original casing if the bot is case sensitive
+      commandName = message.content
+        .slice(usedPrefix.length)
+        .trim()
+        .split(/ +/)[0];
     }
 
     if (!commandName) return;
 
     const disabledData = await getDisabledCommandData(message.guildId!);
     const currentDisabled = disabledData?.command_names || [];
-    if (currentDisabled.includes(commandName)) return;
+    if (currentDisabled.includes(commandName.toLowerCase())) return;
 
     // look for the root command or its alias
     const parentCommand =
-      client.commands.get(commandName) ||
-      client.commands.get(client.commandAliases.get(commandName) as string);
+      client.commands.get(commandName.toLowerCase()) ||
+      client.commands.get(
+        client.commandAliases.get(commandName.toLowerCase()) as string,
+      );
 
     if (!parentCommand) return;
 
@@ -44,7 +69,12 @@ const event: Event = {
     // walk down the command tree to find the exact subcommand invoked
     while (args.length > 0 && currentCommand.subCommands) {
       const nextArg = args[0]?.toLowerCase();
-      if (!nextArg) continue;
+
+      // prevent infinite loops if an argument is somehow falsy/empty
+      if (!nextArg) {
+        args.shift();
+        continue;
+      }
 
       const childCommand = currentCommand.subCommands.find(
         (c: Command) =>
@@ -101,10 +131,10 @@ const event: Event = {
 
         // if we are missing embed links, we must fall back to plain text because our embed will fail to send
         if (missingPerms.includes("EmbedLinks")) {
-          await send(
-            message,
-            `${message.author}: I'm **missing** the permissions: \`${formatted}\`.`,
-          ).catch(() => {}); // silently fail if we don't even have send messages perms
+          // bypass the custom send wrapper to ensure this sends purely as string content
+          await send(message, {
+            content: `⚠️ ${message.author}: I'm **missing** the permissions: \`${formatted}\`.`,
+          }).catch(() => {}); // silently fail if we don't even have send messages perms
           return;
         }
 
@@ -112,6 +142,25 @@ const event: Event = {
           embeds: [
             Embeds.warning(
               `${message.author}: I'm **missing** the permissions: \`${formatted}\`.`,
+            ),
+          ],
+        });
+        return;
+      }
+    }
+
+    // --- FINAL DATABASE CHECKS ---
+
+    // check if the command is restricted to premium users
+    if (currentCommand.requiresUserPremium) {
+      // Auto-create is set to true here so they have a profile if they eventually upgrade
+      const premiumUserData = await getUserData(message.author.id, true);
+
+      if (!premiumUserData?.premium) {
+        await send(message, {
+          embeds: [
+            Embeds.eyeGlass(
+              `${message.author}: The **${invokedPathStr}** command is restricted to **Premium** users.`,
             ),
           ],
         });

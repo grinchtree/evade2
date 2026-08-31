@@ -61,7 +61,8 @@ export interface TempbanData {
 // global user profiles
 export interface UserData {
   id: string;
-  seen_in?: string[]; // added: matches the db schema
+  premium: boolean;
+  personal_prefix: null | string;
   preferences: Record<string, any>;
   created_at?: string;
   updated_at?: string;

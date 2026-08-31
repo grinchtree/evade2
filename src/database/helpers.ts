@@ -138,7 +138,12 @@ export async function getUserData(
     if (data) return data;
 
     if (autoCreate) {
-      const newUser: UserData = { id, preferences: {} };
+      const newUser: UserData = {
+        id,
+        premium: false,
+        personal_prefix: null,
+        preferences: {},
+      };
       await supabase.from("users").insert(newUser);
       return newUser;
     }

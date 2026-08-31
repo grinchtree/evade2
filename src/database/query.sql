@@ -2,7 +2,8 @@
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
-  seen_in TEXT[] DEFAULT '{}',
+  premium BOOLEAN DEFAULT FALSE,
+  personal_prefix TEXT,
   preferences JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
