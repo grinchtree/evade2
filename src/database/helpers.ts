@@ -203,7 +203,6 @@ export async function getMemberData(
         user_id,
         guild_id,
         sticky_roles: [],
-        preferences: {},
       };
 
       await supabase.from("members").insert(newMember);

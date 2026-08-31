@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS guilds (
 CREATE TABLE IF NOT EXISTS members (
   user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   guild_id TEXT REFERENCES guilds(id) ON DELETE CASCADE,
+  forced_nickname TEXT,
   sticky_roles TEXT[] DEFAULT '{}',
-  preferences JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   PRIMARY KEY (user_id, guild_id)

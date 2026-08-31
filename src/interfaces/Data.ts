@@ -38,10 +38,10 @@ export interface HardbanData {
 export interface MemberData {
   user_id: string;
   guild_id: string;
-  sticky_roles: string[];
-  preferences: Record<string, any>;
+  sticky_roles?: string[];
+  forced_nickname?: string;
   created_at?: string;
-  updated_at?: string; // added: matches the db schema
+  updated_at?: string;
 }
 
 // small custom cache object for command prefixes
