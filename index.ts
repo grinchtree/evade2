@@ -23,6 +23,7 @@ async function bootstrap() {
 
   client.once(Events.ClientReady, (readyClient) => {
     logging.info(`Connected to Discord.`);
+
     readyClient.user.setPresence({
       status: "online",
       activities: [
