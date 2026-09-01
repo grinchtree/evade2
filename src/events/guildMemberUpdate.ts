@@ -2,7 +2,7 @@ import { Events } from "discord.js";
 import type { Event } from "../interfaces/Event";
 import type { evClient } from "../structs/Client";
 import type { GuildMember } from "discord.js";
-import { getMemberStickyRoles } from "../database/helpers";
+import { getMemberData, getMemberStickyRoles } from "../database/helpers";
 import { logging } from "../utils/logging";
 
 const event: Event = {
@@ -16,6 +16,8 @@ const event: Event = {
     const removedRoles = oldMember.roles.cache.filter(
       (role) => !newMember.roles.cache.has(role.id),
     );
+
+    // member stuff
 
     if (removedRoles.size > 0) {
       const stickyRoleIds = await getMemberStickyRoles(
@@ -35,6 +37,19 @@ const event: Event = {
         } catch (error: any) {
           logging.error(
             `failed to enforce sticky roles for ${newMember.user.username} in ${newMember.guild.name}: ${error.message || error}`,
+          );
+        }
+      }
+    }
+
+    if (oldMember.nickname !== newMember.nickname) {
+      const memberData = await getMemberData(newMember.id, newMember.guild.id);
+      if (memberData?.forced_nickname) {
+        try {
+          await newMember.edit({ nick: memberData.forced_nickname });
+        } catch (error: any) {
+          logging.error(
+            `failed to enforce forced nickname for ${newMember.user.username} in ${newMember.guild.name}: ${error.message || error}`,
           );
         }
       }

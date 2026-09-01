@@ -2,12 +2,23 @@ import { Events } from "discord.js";
 import type { Event } from "../interfaces/Event";
 import type { evClient } from "../structs/Client";
 import type { GuildMember } from "discord.js";
-import { getAutoroleData, getMemberStickyRoles } from "../database/helpers";
+import {
+  getAutoroleData,
+  getHardbanData,
+  getMemberStickyRoles,
+} from "../database/helpers";
 import { logging } from "../utils/logging";
 
 const event: Event = {
   name: Events.GuildMemberAdd,
   execute: async (member: GuildMember, client: evClient) => {
+    const existingHardban = await getHardbanData(member.guild.id, member.id);
+    if (!existingHardban) {
+      await member.guild.members.ban(member.id, {
+        reason: `Enforcing hardban`,
+      });
+    }
+
     // fetch both datasets simultaneously to speed up execution
     const [autoroleData, stickyRoleIds] = await Promise.all([
       getAutoroleData(member.guild.id, true),
@@ -40,7 +51,7 @@ const event: Event = {
     try {
       await member.roles.add(
         validRoles,
-        "enforcing autoroles and sticky roles",
+        "Enforcing autoroles and sticky roles",
       );
     } catch (error: any) {
       logging.error(

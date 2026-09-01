@@ -1,24 +1,10 @@
-import {
-  GuildMember,
-  InviteTargetUsersJobStatus,
-  PermissionFlagsBits,
-  User,
-  type Message,
-} from "discord.js";
+import { PermissionFlagsBits, User, type Message } from "discord.js";
 import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
 import { Embeds, send } from "../../utils/messaging";
-import {
-  promiseBanEntry,
-  promiseMember,
-  promiseUser,
-} from "../../utils/promise";
-import { checkHierarchy } from "../../utils/permissions";
-import {
-  clampNumber,
-  stringFromSeconds,
-  stringToSeconds,
-} from "../../utils/formatters";
+import { promiseBanEntry, promiseUser } from "../../utils/promise";
+import { getHardbanData } from "../../database/helpers";
+import { sendConfirmationView } from "../../utils/components";
 
 const command: Command = {
   name: "unban",
@@ -65,6 +51,32 @@ const command: Command = {
     const reason = args.slice(1).join(" ") || "No reason provided.";
 
     try {
+      const existingHardban = await getHardbanData(
+        targetUser.id,
+        message.guildId!,
+      );
+
+      if (existingHardban) {
+        if (
+          !message.member?.permissions.has(PermissionFlagsBits.Administrator)
+        ) {
+          await send(message, {
+            embeds: [
+              Embeds.warning(
+                `${message.author}: **${targetUser.username}** is **hardbanned** from the server. Only an **Administrator** can unban them.`,
+              ),
+            ],
+          });
+          return;
+        }
+
+        const confirmed = await sendConfirmationView(
+          message,
+          `${message.author}: Are you sure you want to **unban ${targetUser}**? They are **hardbanned from the server**.`,
+        );
+        if (!confirmed) return;
+      }
+
       const banEntry = await promiseBanEntry(message.guild!, targetUser.id);
       if (!banEntry) {
         await send(message, {
