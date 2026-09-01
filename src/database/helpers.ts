@@ -68,7 +68,15 @@ export async function updateGuildData(
   id: string,
   data: Partial<GuildData>,
 ): Promise<void> {
-  await supabase.from("guilds").update(data).eq("id", id);
+  // ensure the row exists before attempting to update it
+  await getGuildData(id, true);
+
+  const { error } = await supabase.from("guilds").update(data).eq("id", id);
+
+  if (error) {
+    logging.error(`failed to update guild data: ${error.message}`);
+    return;
+  }
 
   // fetch the latest version and update our cache silently
   const current = await getGuildData(id, false);
@@ -157,7 +165,15 @@ export async function updateUserData(
   id: string,
   data: Partial<UserData>,
 ): Promise<void> {
-  await supabase.from("users").update(data).eq("id", id);
+  // ensure the row exists before attempting to update it
+  await getUserData(id, true);
+
+  const { error } = await supabase.from("users").update(data).eq("id", id);
+
+  if (error) {
+    logging.error(`failed to update user data: ${error.message}`);
+    return;
+  }
 
   const current = await getUserData(id, false);
   if (current) usersCache.set(id, { ...current, ...data });
@@ -219,11 +235,18 @@ export async function updateMemberData(
   guild_id: string,
   data: Partial<MemberData>,
 ): Promise<void> {
-  await supabase
+  // ensure the row exists before attempting to update it
+  await getMemberData(user_id, guild_id, true);
+
+  const { error } = await supabase
     .from("members")
     .update(data)
     .eq("user_id", user_id)
     .eq("guild_id", guild_id);
+
+  if (error) {
+    throw new Error(`supabase update failed: ${error.message}`);
+  }
 
   const current = await getMemberData(user_id, guild_id, false);
   if (current) {
@@ -341,7 +364,18 @@ export async function updateAntinukeData(
   guild_id: string,
   data: Partial<AntinukeData>,
 ): Promise<void> {
-  await supabase.from("antinuke").update(data).eq("guild_id", guild_id);
+  // ensure the row exists before attempting to update it
+  await getAntinukeData(guild_id, true);
+
+  const { error } = await supabase
+    .from("antinuke")
+    .update(data)
+    .eq("guild_id", guild_id);
+
+  if (error) {
+    logging.error(`failed to update antinuke data: ${error.message}`);
+    return;
+  }
 
   const current = await getAntinukeData(guild_id, false);
   if (current) antinukeCache.set(guild_id, { ...current, ...data });
@@ -422,7 +456,7 @@ export async function getCaseData(id: string): Promise<CaseData | null> {
       .single();
 
     return data || null;
-  }) as Promise<CaseData | null>; // cast required because the cache accepts both arrays and objects
+  }) as Promise<CaseData | null>;
 }
 
 // fetch all moderation cases tied to a specific guild
@@ -480,7 +514,13 @@ export async function updateCase(
   id: string,
   data: Partial<CaseData>,
 ): Promise<void> {
-  await supabase.from("cases").update(data).eq("id", id);
+  // cases do not auto-create, so we just capture the error if it fails
+  const { error } = await supabase.from("cases").update(data).eq("id", id);
+
+  if (error) {
+    logging.error(`failed to update case: ${error.message}`);
+    return;
+  }
 
   const current = await getCaseData(id);
   if (current) {
@@ -540,10 +580,18 @@ export async function updateDisabledCommandData(
   guild_id: string,
   data: Partial<DisabledCommandData>,
 ): Promise<void> {
-  await supabase
+  // ensure the row exists before attempting to update it
+  await getDisabledCommandData(guild_id, true);
+
+  const { error } = await supabase
     .from("disabled_commands")
     .update(data)
     .eq("guild_id", guild_id);
+
+  if (error) {
+    logging.error(`failed to update disabled command data: ${error.message}`);
+    return;
+  }
 
   const current = await getDisabledCommandData(guild_id, false);
   if (current) disabledCommandsCache.set(guild_id, { ...current, ...data });
@@ -608,12 +656,16 @@ export async function updateAutoroleData(
   guild_id: string,
   data: Partial<AutoroleData>,
 ): Promise<void> {
+  // ensure the row exists before attempting to update it
+  await getAutoroleData(guild_id, true);
+
   const { error } = await supabase
     .from("autoroles")
     .update(data)
     .eq("guild_id", guild_id);
 
   if (error) {
+    logging.error(`failed to update autorole data: ${error.message}`);
     return;
   }
 

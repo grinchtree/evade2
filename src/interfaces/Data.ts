@@ -39,7 +39,7 @@ export interface MemberData {
   user_id: string;
   guild_id: string;
   sticky_roles?: string[];
-  forced_nickname?: string;
+  forced_nickname?: string | null;
   created_at?: string;
   updated_at?: string;
 }

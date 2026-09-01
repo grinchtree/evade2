@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS guilds (
 CREATE TABLE IF NOT EXISTS members (
   user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   guild_id TEXT REFERENCES guilds(id) ON DELETE CASCADE,
-  forced_nickname TEXT,
+  forced_nickname TEXT DEFAULT NULL,
   sticky_roles TEXT[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
