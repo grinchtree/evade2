@@ -53,7 +53,10 @@ const command: Command = {
     const nickname = args.slice(1).join(" ");
 
     try {
-      await targetMember.edit({ nick: nickname || null });
+      await targetMember.edit({
+        nick: nickname,
+        reason: `${message.author} (ID: ${message.author.id})`,
+      });
 
       await send(message, {
         embeds: [
