@@ -59,7 +59,7 @@ const command: Command = {
         if (bans.length === 0) {
           await send(message, {
             embeds: [
-              Embeds.eyeGlass(
+              Embeds.warning(
                 `${message.author}: There **aren't any banned members** in the server.`,
               ),
             ],
