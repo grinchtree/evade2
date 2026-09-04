@@ -5,7 +5,7 @@ import { Embeds, send } from "../../utils/messaging";
 
 const command: Command = {
   name: "server",
-  description: "Manage the server.",
+  description: "Manage and customize the server's appearance.",
 
   aliases: ["guild"],
 
@@ -13,14 +13,19 @@ const command: Command = {
   requiredUserPermissions: [PermissionFlagsBits.ManageGuild],
   requiredClientPermissions: [PermissionFlagsBits.ManageGuild],
 
-  syntax: "(subcommand) (argument)",
-  example: "rename Evade's Awesome Server",
+  syntax: "(subcommand) (arguments)",
+  example: "rename Barf Gag FanClub",
+
+  cooldown: {
+    limit: 2,
+    duration: 5,
+    type: "member",
+  },
 
   subCommands: [
     {
       name: "rename",
-      description: "Rename the server.",
-
+      description: "Change the server's name.",
       aliases: ["name"],
 
       guild_only: true,
@@ -28,71 +33,87 @@ const command: Command = {
       requiredClientPermissions: [PermissionFlagsBits.ManageGuild],
 
       syntax: "(name)",
-      example: "Evade's Awesome Server",
+      example: "Barf Gag FanClub",
 
       cooldown: {
-        limit: 1,
-        duration: 60 * 5,
-        type: "guild",
+        limit: 2,
+        duration: 30,
+        type: "member",
       },
 
       execute: async (client: evClient, message: Message, args: string[]) => {
-        // if no args are given, send the command example instead
-        if (args.length === 0) {
+        const newName = args.join(" ");
+
+        if (!newName) {
           await send(message, {
-            embeds: [await Embeds.commandExample(message, client, command)],
+            embeds: [
+              await Embeds.commandExample(
+                message,
+                client,
+                command,
+                "server rename",
+              ),
+            ],
           });
           return;
         }
 
-        const name = args.join(" ");
-
         try {
-          // editing server name
-          await message.guild!.edit({ name: name });
+          await message.guild!.setName(newName);
 
-          // send success message
           await send(message, {
             embeds: [
               Embeds.approve(
-                `${message.author}: Successfully **renamed server** to: \`${name}\`.`,
+                `${message.author}: Successfully **renamed server** to: \`${newName}\`.`,
               ),
             ],
           });
-        } catch (error) {
+        } catch (error: any) {
           await send(message, {
-            embeds: [Embeds.deny(`${message.author}: ${error}.`)],
+            embeds: [
+              Embeds.deny(`${message.author}: ${error.message || error}.`),
+            ],
           });
-          return;
         }
       },
     },
     {
       name: "icon",
-      description: "Change the server's icon",
-
-      aliases: ["image", "picture", "pfp"],
+      description: "Customize the server's icon.",
+      aliases: ["logo", "pfp"],
 
       guild_only: true,
       requiredUserPermissions: [PermissionFlagsBits.ManageGuild],
       requiredClientPermissions: [PermissionFlagsBits.ManageGuild],
 
-      syntax: "(attachment)",
-      example: "https://pfp.com/img.png",
+      syntax: "(image)",
+      example: "image.png",
 
       cooldown: {
-        limit: 1,
-        duration: 60 * 5,
-        type: "guild",
+        limit: 2,
+        duration: 60,
+        type: "member",
       },
 
       execute: async (client: evClient, message: Message, args: string[]) => {
-        const attachment = message.attachments.first(); // getting the first provided attachment
+        const isReset = args[0]?.toLowerCase() === "reset";
+        const attachment = message.attachments.first();
+        let image: string | null = null;
 
-        const iconInput = attachment ? attachment.url : args[0]; // if attachment exists, use that, else use first argument
+        if (!isReset) {
+          if (attachment) {
+            if (attachment.contentType?.startsWith("image/")) {
+              image = attachment.url;
+            }
+          } else if (args[0]) {
+            const urlRegex = /^https?:\/\/.*\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i;
+            if (urlRegex.test(args[0])) {
+              image = args[0];
+            }
+          }
+        }
 
-        if (!iconInput) {
-          // if args[0] and attachment doesn't exist, end command
+        if (!isReset && !image) {
           await send(message, {
             embeds: [
               await Embeds.commandExample(
@@ -107,20 +128,198 @@ const command: Command = {
         }
 
         try {
-          // set icon
-          await message.guild!.setIcon(iconInput);
+          await message.guild!.setIcon(image);
 
-          // send success message
           await send(message, {
             embeds: [
               Embeds.approve(
-                `${message.author}: Successfully **updated the server icon**.`,
+                `${message.author}: Successfully ${isReset ? "reset" : "updated"} **server icon**.`,
               ),
             ],
           });
-        } catch (error) {
+        } catch (error: any) {
+          if (
+            error.message?.includes("too fast") ||
+            error.message?.includes("rate limit")
+          ) {
+            await send(message, {
+              embeds: [
+                Embeds.deny(
+                  `${message.author}: You're changing the server icon **too fast**. Try again later.`,
+                ),
+              ],
+            });
+            return;
+          }
           await send(message, {
-            embeds: [Embeds.deny(`${message.author}: ${error}.`)],
+            embeds: [
+              Embeds.deny(`${message.author}: ${error.message || error}.`),
+            ],
+          });
+        }
+      },
+    },
+    {
+      name: "banner",
+      description: "Customize the server's banner (Requires Boost Level 2).",
+      aliases: ["ban", "bg"],
+
+      guild_only: true,
+      requiredUserPermissions: [PermissionFlagsBits.ManageGuild],
+      requiredClientPermissions: [PermissionFlagsBits.ManageGuild],
+
+      syntax: "(image)",
+      example: "image.png",
+
+      cooldown: {
+        limit: 2,
+        duration: 60,
+        type: "member",
+      },
+
+      execute: async (client: evClient, message: Message, args: string[]) => {
+        const isReset = args[0]?.toLowerCase() === "reset";
+        const attachment = message.attachments.first();
+        let image: string | null = null;
+
+        if (!isReset) {
+          if (attachment) {
+            if (attachment.contentType?.startsWith("image/")) {
+              image = attachment.url;
+            }
+          } else if (args[0]) {
+            const urlRegex = /^https?:\/\/.*\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i;
+            if (urlRegex.test(args[0])) {
+              image = args[0];
+            }
+          }
+        }
+
+        if (!isReset && !image) {
+          await send(message, {
+            embeds: [
+              await Embeds.commandExample(
+                message,
+                client,
+                command,
+                "server banner",
+              ),
+            ],
+          });
+          return;
+        }
+
+        try {
+          await message.guild!.setBanner(image);
+
+          await send(message, {
+            embeds: [
+              Embeds.approve(
+                `${message.author}: Successfully ${isReset ? "reset" : "updated"} **server banner**.`,
+              ),
+            ],
+          });
+        } catch (error: any) {
+          if (
+            error.message?.includes("too fast") ||
+            error.message?.includes("rate limit")
+          ) {
+            await send(message, {
+              embeds: [
+                Embeds.deny(
+                  `${message.author}: You're changing the server banner **too fast**. Try again later.`,
+                ),
+              ],
+            });
+            return;
+          }
+          await send(message, {
+            embeds: [
+              Embeds.deny(`${message.author}: ${error.message || error}.`),
+            ],
+          });
+        }
+      },
+    },
+    {
+      name: "splash",
+      description:
+        "Customize the server's invite splash background (Requires Boost Level 1).",
+      aliases: ["invitesplash"],
+
+      guild_only: true,
+      requiredUserPermissions: [PermissionFlagsBits.ManageGuild],
+      requiredClientPermissions: [PermissionFlagsBits.ManageGuild],
+
+      syntax: "(image)",
+      example: "image.png",
+
+      cooldown: {
+        limit: 2,
+        duration: 60,
+        type: "member",
+      },
+
+      execute: async (client: evClient, message: Message, args: string[]) => {
+        const isReset = args[0]?.toLowerCase() === "reset";
+        const attachment = message.attachments.first();
+        let image: string | null = null;
+
+        if (!isReset) {
+          if (attachment) {
+            if (attachment.contentType?.startsWith("image/")) {
+              image = attachment.url;
+            }
+          } else if (args[0]) {
+            const urlRegex = /^https?:\/\/.*\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i;
+            if (urlRegex.test(args[0])) {
+              image = args[0];
+            }
+          }
+        }
+
+        if (!isReset && !image) {
+          await send(message, {
+            embeds: [
+              await Embeds.commandExample(
+                message,
+                client,
+                command,
+                "server splash",
+              ),
+            ],
+          });
+          return;
+        }
+
+        try {
+          await message.guild!.setSplash(image);
+
+          await send(message, {
+            embeds: [
+              Embeds.approve(
+                `${message.author}: Successfully ${isReset ? "reset" : "updated"} **server invite splash**.`,
+              ),
+            ],
+          });
+        } catch (error: any) {
+          if (
+            error.message?.includes("too fast") ||
+            error.message?.includes("rate limit")
+          ) {
+            await send(message, {
+              embeds: [
+                Embeds.deny(
+                  `${message.author}: You're changing the invite splash **too fast**. Try again later.`,
+                ),
+              ],
+            });
+            return;
+          }
+          await send(message, {
+            embeds: [
+              Embeds.deny(`${message.author}: ${error.message || error}.`),
+            ],
           });
         }
       },
