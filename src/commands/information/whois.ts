@@ -102,6 +102,10 @@ const command: Command = {
 
     const bannerUrl = targetUser.bannerURL({ size: 1024, extension: "png" });
 
+    const mutualGuilds = client.guilds.cache.filter((guild) =>
+      guild.members.cache.has(targetUser.id),
+    );
+
     const embed = new EmbedBuilder()
       .setTitle(`@${targetUser.username}'s Profile`)
       .setThumbnail(avatarUrl)
@@ -110,7 +114,9 @@ const command: Command = {
         name: message.author.username,
         iconURL: message.author.displayAvatarURL({ size: 512 }),
       })
-      .setFooter({ text: `ID: ${targetUser.id}` });
+      .setFooter({
+        text: `ID: ${targetUser.id}${mutualGuilds.size > 0 ? ` • ${mutualGuilds.size} mutual ${mutualGuilds.size === 1 ? "guild" : "guilds"}` : ""}`,
+      });
 
     if (bannerUrl) {
       row.addComponents(
