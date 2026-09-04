@@ -336,37 +336,21 @@ const command: Command = {
         const remainingCount = memberResults.length - MAX_DETAILED_EMBEDS;
 
         for (const result of displayResults) {
-          let emoji = Emojis.add;
-          const summary = [];
+          const changes: string[] = [];
 
           if (result.added.length > 0) {
-            summary.push(
-              `**Sticky Added**: ${result.added.map((r) => r.toString()).join(", ")}`,
-            );
+            changes.push(...result.added.map((r) => `+${r.toString()}`));
           }
           if (result.removed.length > 0) {
-            summary.push(
-              `**Sticky Removed**: ${result.removed.map((r) => r.toString()).join(", ")}`,
-            );
+            changes.push(...result.removed.map((r) => `-${r.toString()}`));
           }
 
-          let final = "";
-          const lastEntry = summary[summary.length - 1];
-
-          if (lastEntry?.startsWith("**Sticky Removed**")) {
-            final = `from ${result.member}`;
-          } else {
-            final = `to ${result.member}`;
-          }
-
-          if (summary[0]?.startsWith("**Sticky Removed**")) {
-            emoji = Emojis.minus;
-          }
+          const emoji = result.added.length > 0 ? Emojis.add : Emojis.minus;
 
           responseEmbeds.push(
             Embeds.custom(
               emoji,
-              `${message.author}: ${summary.join(" - ")} ${final}.`,
+              `${message.author}: Successfully **modified ${result.member.user.username}**'s sticky roles: ${changes.join(", ")}.`,
               Colours.mathBlue,
             ),
           );

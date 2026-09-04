@@ -10,7 +10,6 @@ import type { Command } from "../../interfaces/Command";
 import type { evClient } from "../../structs/Client";
 import { Colours, Embeds, Emojis, send } from "../../utils/messaging";
 import { promiseMember, promiseRole } from "../../utils/promise";
-import type { inflateSync } from "bun";
 import {
   Paginator,
   sendCancellableTask,
@@ -687,10 +686,21 @@ const command: Command = {
     }
 
     if (targetMembers.length === 0 || targetRoles.length === 0) {
-      await send(message, {
-        embeds: [await Embeds.commandExample(message, client, command)],
-      });
-      return;
+      if (!args[1]) {
+        await send(message, {
+          embeds: [await Embeds.commandExample(message, client, command)],
+        });
+        return;
+      } else {
+        await send(message, {
+          embeds: [
+            Embeds.eyeGlass(
+              `${message.author}: I couldn't find **a role** by: \`${args[1]}\`. Try using its **ID** instead.`,
+            ),
+          ],
+        });
+        return;
+      }
     }
 
     const isOwner = message.author.id === message.guild!.ownerId;
@@ -753,37 +763,21 @@ const command: Command = {
         const remainingCount = memberResults.length - MAX_DETAILED_EMBEDS;
 
         for (const result of displayResults) {
-          let emoji = Emojis.add;
-          const summary = [];
+          const changes: string[] = [];
 
           if (result.added.length > 0) {
-            summary.push(
-              `**Added**: ${result.added.map((r) => r.toString()).join(", ")}`,
-            );
+            changes.push(...result.added.map((r) => `+${r.toString()}`));
           }
           if (result.removed.length > 0) {
-            summary.push(
-              `**Removed**: ${result.removed.map((r) => r.toString()).join(", ")}`,
-            );
+            changes.push(...result.removed.map((r) => `-${r.toString()}`));
           }
 
-          let final = "";
-          const lastEntry = summary[summary.length - 1];
-
-          if (lastEntry?.startsWith("**Removed**")) {
-            final = `from ${result.member}`;
-          } else {
-            final = `to ${result.member}`;
-          }
-
-          if (summary[0]?.startsWith("**Removed**")) {
-            emoji = Emojis.minus;
-          }
+          const emoji = result.added.length > 0 ? Emojis.add : Emojis.minus;
 
           responseEmbeds.push(
             Embeds.custom(
               emoji,
-              `${message.author}: ${summary.join(" - ")} ${final}.`,
+              `${message.author}: Successfully **modified ${result.member.user.username}**'s roles: ${changes.join(", ")}.`,
               Colours.mathBlue,
             ),
           );
