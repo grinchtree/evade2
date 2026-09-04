@@ -10,6 +10,7 @@ import {
   getDisabledCommandData,
   getPrefixData,
   getUserData,
+  getGuildData,
 } from "../database/helpers";
 
 const event: Event = {
@@ -50,15 +51,26 @@ const event: Event = {
 
     if (!commandName) return;
 
+    // resolve custom server aliases first
+    if (message.guildId) {
+      const guildData = await getGuildData(message.guildId, false);
+      const customAliases = guildData?.preferences?.aliases || {};
+
+      // if the user typed a custom alias, silently swap it to the real command name
+      if (customAliases[commandName.toLowerCase()]) {
+        commandName = customAliases[commandName.toLowerCase()];
+      }
+    }
+
     const disabledData = await getDisabledCommandData(message.guildId!);
     const currentDisabled = disabledData?.command_names || [];
-    if (currentDisabled.includes(commandName.toLowerCase())) return;
+    if (currentDisabled.includes(commandName!.toLowerCase())) return;
 
     // look for the root command or its alias
     const parentCommand =
-      client.commands.get(commandName.toLowerCase()) ||
+      client.commands.get(commandName!.toLowerCase()) ||
       client.commands.get(
-        client.commandAliases.get(commandName.toLowerCase()) as string,
+        client.commandAliases.get(commandName!.toLowerCase()) as string,
       );
 
     if (!parentCommand) return;
