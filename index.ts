@@ -17,8 +17,14 @@ async function bootstrap() {
       GatewayIntentBits.GuildModeration,
       GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildVoiceStates,
+      GatewayIntentBits.GuildMessageReactions,
     ],
-    partials: [Partials.GuildMember, Partials.User],
+    partials: [
+      Partials.GuildMember,
+      Partials.User,
+      Partials.Reaction,
+      Partials.Message,
+    ],
   });
 
   client.once(Events.ClientReady, (readyClient) => {
