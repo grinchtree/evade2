@@ -94,3 +94,12 @@ export interface AutoroleData {
   created_at?: string;
   updated_at?: String;
 }
+
+// guilds voicemaster
+export interface VoicemasterData {
+  guild_id: string;
+  configuration?: Record<string, any>;
+  active_channels?: Record<string, any>;
+  created_at?: string;
+  updated_at?: String;
+}

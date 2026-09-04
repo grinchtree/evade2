@@ -1,3 +1,16 @@
+-- drop the entire public schema and everything inside it (tables, functions, indexes, views)
+DROP SCHEMA public CASCADE;
+
+-- recreate a fresh, empty public schema
+CREATE SCHEMA public;
+
+-- restore the default supabase permissions so your api and database roles can access it again
+GRANT ALL ON SCHEMA public TO postgres;
+GRANT ALL ON SCHEMA public TO public;
+GRANT ALL ON SCHEMA public TO anon;
+GRANT ALL ON SCHEMA public TO authenticated;
+GRANT ALL ON SCHEMA public TO service_role;
+
 -- 1. base tables (these must be created first so others can reference them)
 
 CREATE TABLE IF NOT EXISTS users (
@@ -87,6 +100,14 @@ CREATE TABLE IF NOT EXISTS autoroles (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
+CREATE TABLE IF NOT EXISTS voicemaster (
+  guild_id TEXT PRIMARY KEY REFERENCES guilds(id) ON DELETE CASCADE,
+  configuration JSONB DEFAULT '{}'::jsonb,
+  active_channels JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+)
+
 -- 3. performance indexes (speeds up the bot's background tasks)
 
 CREATE INDEX IF NOT EXISTS idx_tempbans_expires_at ON tempbans(expires_at);
@@ -94,3 +115,22 @@ CREATE INDEX IF NOT EXISTS idx_warnings_guild_user ON warnings(guild_id, user_id
 CREATE INDEX IF NOT EXISTS idx_cases_guild ON cases(guild_id);
 CREATE INDEX IF NOT EXISTS idx_disabled_commands ON disabled_commands(guild_id);
 CREATE INDEX IF NOT EXISTS idx_autoroles ON autoroles(guild_id)
+CREATE INDEX IF NOT EXISTS idx_voicemaster ON voicemaster(guild_id)
+
+ALTER TABLE guilds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE warnings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE antinuke ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hardbans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE disabled_commands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE autoroles ENABLE ROW LEVEL SECURITY;
+
+-- grant access to all current tables and sequences
+grant all privileges on all tables in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all sequences in schema public to postgres, anon, authenticated, service_role;
+
+-- ensure any future tables you create automatically get these permissions too
+alter default privileges in schema public grant all on tables to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to postgres, anon, authenticated, service_role;

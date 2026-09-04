@@ -12,6 +12,7 @@ import {
   type WarningData,
   type DisabledCommandData,
   type AutoroleData,
+  type VoicemasterData,
 } from "../interfaces/Data";
 import type { GatewayAutoModerationRuleUpdateDispatch } from "discord.js";
 
@@ -35,6 +36,10 @@ const disabledCommandsCache = new DatabaseCache<DisabledCommandData | null>(
 );
 
 const autoroleCache = new DatabaseCache<AutoroleData | null>(1000, 300000);
+const voicemasterCache = new DatabaseCache<VoicemasterData | null>(
+  1000,
+  300000,
+);
 
 // --- GUILD DATA ---
 
@@ -735,4 +740,71 @@ export async function clearMemberStickyRoles(
   guild_id: string,
 ): Promise<void> {
   await updateMemberData(user_id, guild_id, { sticky_roles: [] });
+}
+
+// --- VOICEMASTER DATA ---
+export async function getVoicemasterData(
+  guild_id: string,
+  autoCreate: boolean = true,
+): Promise<VoicemasterData | null> {
+  return voicemasterCache.getOrFetch(guild_id, async () => {
+    const { data } = await supabase
+      .from("voicemaster")
+      .select("*")
+      .eq("guild_id", guild_id)
+      .single();
+
+    if (data) return data;
+
+    if (autoCreate) {
+      await getGuildData(guild_id, true);
+
+      const newVoicemaster: VoicemasterData = {
+        guild_id,
+        configuration: {},
+        active_channels: {},
+      };
+
+      const { error } = await supabase
+        .from("voicemaster")
+        .insert(newVoicemaster);
+
+      if (error) {
+        logging.error(`failed to create voicemaster data: ${error.message}`);
+      }
+
+      return newVoicemaster;
+    }
+
+    return null;
+  });
+}
+
+export async function updateVoicemasterData(
+  guild_id: string,
+  data: Partial<VoicemasterData>,
+): Promise<void> {
+  await getVoicemasterData(guild_id, true);
+
+  const { error } = await supabase
+    .from("voicemaster")
+    .update(data)
+    .eq("guild_id", guild_id);
+
+  if (error) {
+    logging.error(`failed to update voicemaster data: ${error.message}`);
+    return;
+  }
+
+  const current = await getVoicemasterData(guild_id, false);
+  if (current) voicemasterCache.set(guild_id, { ...current, ...data });
+}
+
+export async function deleteVoicemasterData(guild_id: string): Promise<void> {
+  await supabase.from("voicemaster").delete().eq("guild_id", guild_id);
+  voicemasterCache.delete(guild_id);
+}
+
+export async function dumpVoicemasterData(guild_id: string): Promise<void> {
+  voicemasterCache.delete(guild_id);
 }
